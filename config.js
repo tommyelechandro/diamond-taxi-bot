@@ -1,7 +1,14 @@
 module.exports = {
+
+    // Rollen
     mitarbeiterRolle: "1482761223497056369",
     leitungRolle: "1489698355507499169",
 
+    // Kanal für automatische Team-Updates
+    teamUpdateKanal: "HIER_KANAL_ID_EINTRAGEN",
+
+
+    // Leitungsebene Rollen
     leitungsebene: [
         "1482761216232525824",
         "1496235902069112883",
@@ -11,7 +18,10 @@ module.exports = {
         "1457890985567846410"
     ],
 
+
+    // Alle Diamond Taxi Ränge
     rollen: {
+
         "Praktikant": "1457892267099422762",
         "Junior Fahrer": "1457891276505747610",
         "Fahrer": "1457891223695130755",
@@ -28,5 +38,7 @@ module.exports = {
         "Geschäftsleitung Airport": "1503135142535762010",
         "Geschäftsleitung": "1457891019843436757",
         "CEO": "1457890985567846410"
+
     }
+
 };
