@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits } = require("discord.js");
 require("dotenv").config();
 const config = require("./config.js");
+const handleEvents = require("./events.js");
 
 const client = new Client({
     intents: [
@@ -27,6 +28,7 @@ client.once("ready", async () => {
     }
 });
 
+client.on("interactionCreate", handleEvents);
 client.login(process.env.TOKEN);
 const ranks = [
     "Praktikant",
