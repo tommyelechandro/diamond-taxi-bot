@@ -42,14 +42,13 @@ const lobAuswahl = [
 
 module.exports = [
 
-    // EINSTELLUNG
     new SlashCommandBuilder()
         .setName("einstellung")
         .setDescription("Stellt einen neuen Mitarbeiter ein")
         .addUserOption(option =>
             option
                 .setName("mitarbeiter")
-                .setDescription("Neuer Mitarbeiter")
+                .setDescription("Mitarbeiter auswählen")
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -67,7 +66,6 @@ module.exports = [
         ),
 
 
-    // BEFÖRDERUNG
     new SlashCommandBuilder()
         .setName("beförderung")
         .setDescription("Befördert einen Mitarbeiter")
@@ -87,7 +85,7 @@ module.exports = [
         .addStringOption(option =>
             option
                 .setName("nachricht")
-                .setDescription("Optionale Nachricht")
+                .setDescription("Eigene Nachricht der Leitung")
                 .setRequired(false)
         )
         .addStringOption(option =>
@@ -99,7 +97,6 @@ module.exports = [
         ),
 
 
-    // DEGRADIERUNG
     new SlashCommandBuilder()
         .setName("degradierung")
         .setDescription("Degradiert einen Mitarbeiter")
@@ -124,7 +121,6 @@ module.exports = [
         ),
 
 
-    // KÜNDIGUNG
     new SlashCommandBuilder()
         .setName("kündigung")
         .setDescription("Kündigt einen Mitarbeiter")
@@ -140,4 +136,5 @@ module.exports = [
                 .setDescription("Grund der Kündigung")
                 .setRequired(true)
         )
+
 ];
