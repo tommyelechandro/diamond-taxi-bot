@@ -5,204 +5,241 @@ module.exports = async (interaction) => {
 
     if (!interaction.isChatInputCommand()) return;
 
+    try {
 
-    const user = interaction.options.getMember("mitarbeiter");
+        const user = interaction.options.getMember("mitarbeiter");
 
 
-    // Funktion: alte Rangrollen entfernen
-    async function entferneRang(user) {
-        for (const rolle of Object.values(config.rollen)) {
-            if (user.roles.cache.has(rolle)) {
-                await user.roles.remove(rolle);
+        async function entferneRang(user) {
+            for (const rolleID of Object.values(config.rollen)) {
+
+                const rolle = interaction.guild.roles.cache.get(rolleID);
+
+                if (rolle && user.roles.cache.has(rolleID)) {
+                    await user.roles.remove(rolle);
+                }
             }
         }
-    }
 
 
-    // Funktion: neuen Rang geben
-    async function gebeRang(user, rang) {
+        async function gebeRang(user, rang) {
 
-        const rolle = interaction.guild.roles.cache.get(
-            config.rollen[rang]
-        );
+            const rollenID = config.rollen[rang];
 
-        if (!rolle) {
-            throw new Error("Rolle nicht gefunden");
-        }
-
-        await user.roles.add(rolle);
-
-        // Mitarbeiterrolle geben
-        await user.roles.add(config.mitarbeiterRolle);
-
-
-        // Leitungsebene prüfen
-        if (config.leitungsebene.includes(config.rollen[rang])) {
-            await user.roles.add(config.leitungRolle);
-        } else {
-
-            if (user.roles.cache.has(config.leitungRolle)) {
-                await user.roles.remove(config.leitungRolle);
+            if (!rollenID) {
+                throw new Error(`Rang existiert nicht in config.js: ${rang}`);
             }
 
-        }
-    }
+
+            const rolle = interaction.guild.roles.cache.get(rollenID);
 
 
-
-    // =========================
-    // EINSTELLUNG
-    // =========================
-
-    if (interaction.commandName === "einstellung") {
-
-        const rang = interaction.options.getString("rang");
-        const grund = interaction.options.getString("grund");
-
-        await gebeRang(user, rang);
+            if (!rolle) {
+                throw new Error(`Discord Rolle nicht gefunden: ${rang}`);
+            }
 
 
-        const embed = new EmbedBuilder()
-            .setTitle("🚕💎 Einstellung")
-            .setDescription(
-                `Herzlich willkommen <@${user.id}>!\n\n` +
-                `Du wurdest als **${rang}** bei Diamond Taxi eingestellt.\n\n` +
-                `**Grund:** ${grund}\n\n` +
-                `Wir wünschen dir viel Erfolg im Team!`
-            )
-            .setTimestamp();
+            await user.roles.add(rolle);
 
 
-        return interaction.reply({
-            embeds: [embed]
-        });
-    }
+            // Mitarbeiter Rolle
+            const mitarbeiter = interaction.guild.roles.cache.get(
+                config.mitarbeiterRolle
+            );
+
+            if (mitarbeiter) {
+                await user.roles.add(mitarbeiter);
+            }
 
 
+            // Leitungsebene
+            if (config.leitungsebene.includes(rollenID)) {
 
+                const leitung = interaction.guild.roles.cache.get(
+                    config.leitungRolle
+                );
 
-    // =========================
-    // BEFÖRDERUNG
-    // =========================
+                if (leitung) {
+                    await user.roles.add(leitung);
+                }
 
-    if (interaction.commandName === "beförderung") {
+            } else {
 
-        const rang = interaction.options.getString("rang");
-        const nachricht = interaction.options.getString("nachricht");
-        const lob = interaction.options.getString("lob");
+                const leitung = interaction.guild.roles.cache.get(
+                    config.leitungRolle
+                );
 
+                if (leitung && user.roles.cache.has(config.leitungRolle)) {
+                    await user.roles.remove(leitung);
+                }
 
-        await entferneRang(user);
-
-        await gebeRang(user, rang);
-
-
-        let zusatz = "";
-
-        if (nachricht) {
-            zusatz = nachricht;
-        } 
-        else if (lob) {
-            zusatz = lob;
-        }
-        else {
-            zusatz = "Wir wünschen dir weiterhin viel Erfolg bei Diamond Taxi!";
-        }
-
-
-        const embed = new EmbedBuilder()
-            .setTitle("🚕💎 Beförderung")
-            .setDescription(
-                `Herzlichen Glückwunsch <@${user.id}>!\n\n` +
-                `Du wurdest zum **${rang}** befördert.\n\n` +
-                `**Nachricht der Leitung:**\n${zusatz}`
-            )
-            .setTimestamp();
-
-
-        return interaction.reply({
-            embeds: [embed]
-        });
-
-    }
-
-
-
-
-
-    // =========================
-    // DEGRADIERUNG
-    // =========================
-
-    if (interaction.commandName === "degradierung") {
-
-
-        const rang = interaction.options.getString("rang");
-        const grund = interaction.options.getString("grund");
-
-
-        await entferneRang(user);
-
-        await gebeRang(user, rang);
-
-
-
-        const embed = new EmbedBuilder()
-            .setTitle("⚠️ Degradierung")
-            .setDescription(
-                `<@${user.id}> wurde auf **${rang}** gesetzt.\n\n` +
-                `**Grund:** ${grund}`
-            )
-            .setTimestamp();
-
-
-        return interaction.reply({
-            embeds: [embed]
-        });
-
-    }
-
-
-
-
-
-    // =========================
-    // KÜNDIGUNG
-    // =========================
-
-    if (interaction.commandName === "kündigung") {
-
-
-        const grund = interaction.options.getString("grund");
-
-
-        await entferneRang(user);
-
-
-        if (user.roles.cache.has(config.mitarbeiterRolle)) {
-            await user.roles.remove(config.mitarbeiterRolle);
-        }
-
-
-        if (user.roles.cache.has(config.leitungRolle)) {
-            await user.roles.remove(config.leitungRolle);
+            }
         }
 
 
 
-        const embed = new EmbedBuilder()
-            .setTitle("❌ Kündigung")
-            .setDescription(
-                `<@${user.id}> wurde aus Diamond Taxi entfernt.\n\n` +
-                `**Grund:** ${grund}`
-            )
-            .setTimestamp();
+        // ======================
+        // EINSTELLUNG
+        // ======================
+
+        if (interaction.commandName === "einstellung") {
+
+            const rang = interaction.options.getString("rang");
+            const grund = interaction.options.getString("grund");
 
 
-        return interaction.reply({
-            embeds: [embed]
-        });
+            await gebeRang(user, rang);
 
+
+            const embed = new EmbedBuilder()
+                .setTitle("🚕💎 Einstellung")
+                .setDescription(
+                    `Herzlich willkommen <@${user.id}>!\n\n` +
+                    `Du wurdest als **${rang}** eingestellt.\n\n` +
+                    `**Grund:** ${grund}\n\n` +
+                    `Wir wünschen dir viel Erfolg bei Diamond Taxi!`
+                )
+                .setTimestamp();
+
+
+            return interaction.reply({
+                embeds: [embed]
+            });
+        }
+
+
+
+        // ======================
+        // BEFÖRDERUNG
+        // ======================
+
+        if (interaction.commandName === "beförderung") {
+
+            const rang = interaction.options.getString("rang");
+            const nachricht = interaction.options.getString("nachricht");
+            const lob = interaction.options.getString("lob");
+
+
+            await entferneRang(user);
+
+            await gebeRang(user, rang);
+
+
+            const text =
+                nachricht ||
+                lob ||
+                "Wir wünschen dir weiterhin viel Erfolg bei Diamond Taxi!";
+
+
+            const embed = new EmbedBuilder()
+                .setTitle("🚕💎 Beförderung")
+                .setDescription(
+                    `Herzlichen Glückwunsch <@${user.id}>!\n\n` +
+                    `Du wurdest zum **${rang}** befördert.\n\n` +
+                    `**Nachricht der Leitung:**\n${text}`
+                )
+                .setTimestamp();
+
+
+            return interaction.reply({
+                embeds: [embed]
+            });
+        }
+
+
+
+        // ======================
+        // DEGRADIERUNG
+        // ======================
+
+        if (interaction.commandName === "degradierung") {
+
+            const rang = interaction.options.getString("rang");
+            const grund = interaction.options.getString("grund");
+
+
+            await entferneRang(user);
+
+            await gebeRang(user, rang);
+
+
+            const embed = new EmbedBuilder()
+                .setTitle("⚠️ Degradierung")
+                .setDescription(
+                    `<@${user.id}> wurde auf **${rang}** gesetzt.\n\n` +
+                    `**Grund:** ${grund}`
+                )
+                .setTimestamp();
+
+
+            return interaction.reply({
+                embeds: [embed]
+            });
+        }
+
+
+
+        // ======================
+        // KÜNDIGUNG
+        // ======================
+
+        if (interaction.commandName === "kündigung") {
+
+            const grund = interaction.options.getString("grund");
+
+
+            await entferneRang(user);
+
+
+            const mitarbeiter = interaction.guild.roles.cache.get(
+                config.mitarbeiterRolle
+            );
+
+            if (mitarbeiter && user.roles.cache.has(config.mitarbeiterRolle)) {
+                await user.roles.remove(mitarbeiter);
+            }
+
+
+            const leitung = interaction.guild.roles.cache.get(
+                config.leitungRolle
+            );
+
+            if (leitung && user.roles.cache.has(config.leitungRolle)) {
+                await user.roles.remove(leitung);
+            }
+
+
+
+            const embed = new EmbedBuilder()
+                .setTitle("❌ Kündigung")
+                .setDescription(
+                    `<@${user.id}> wurde aus Diamond Taxi entfernt.\n\n` +
+                    `**Grund:** ${grund}`
+                )
+                .setTimestamp();
+
+
+            return interaction.reply({
+                embeds: [embed]
+            });
+        }
+
+
+
+    } catch (error) {
+
+        console.error(error);
+
+
+        if (!interaction.replied) {
+
+            await interaction.reply({
+                content:
+                    "❌ Fehler: " +
+                    error.message,
+                ephemeral: true
+            });
+
+        }
     }
-
 };
