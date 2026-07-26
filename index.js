@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits } = require("discord.js");
 require("dotenv").config();
 const config = require("./config.js");
 const handleEvents = require("./events.js");
+const http = require("http");
 
 const client = new Client({
     intents: [
@@ -27,7 +28,10 @@ client.once("ready", async () => {
         console.error(error);
     }
 });
-
+http.createServer((req, res) => {
+    res.write("Diamond Taxi Bot läuft!");
+    res.end();
+}).listen(3000);
 client.on("interactionCreate", handleEvents);
 client.login(process.env.TOKEN);
 const ranks = [
