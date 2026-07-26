@@ -7,9 +7,23 @@ const client = new Client({
         GatewayIntentBits.GuildMembers
     ]
 });
+const { REST, Routes } = require("discord.js");
+const commands = require("./commands.js");
 
-client.once("ready", () => {
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+client.once("ready", async () => {
     console.log(`Bot online als ${client.user.tag}`);
+
+    try {
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands }
+        );
+
+        console.log("Slash-Befehle wurden registriert!");
+    } catch (error) {
+        console.error(error);
+    }
 });
 
 client.login(process.env.TOKEN);
