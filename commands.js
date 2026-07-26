@@ -19,8 +19,55 @@ const rangAuswahl = [
     { name: "CEO", value: "CEO" }
 ];
 
+
+const lobAuswahl = [
+    {
+        name: "Sehr gute Arbeit geleistet",
+        value: "Sehr gute Arbeit geleistet"
+    },
+    {
+        name: "In letzter Zeit sehr gute Entwicklung gezeigt",
+        value: "In letzter Zeit sehr gute Entwicklung gezeigt"
+    },
+    {
+        name: "Besonderes Engagement im Team gezeigt",
+        value: "Besonderes Engagement im Team gezeigt"
+    },
+    {
+        name: "Für die neue Aufgabe bereit",
+        value: "Für die neue Aufgabe bereit"
+    }
+];
+
+
 module.exports = [
 
+    // EINSTELLUNG
+    new SlashCommandBuilder()
+        .setName("einstellung")
+        .setDescription("Stellt einen neuen Mitarbeiter ein")
+        .addUserOption(option =>
+            option
+                .setName("mitarbeiter")
+                .setDescription("Neuer Mitarbeiter")
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option
+                .setName("rang")
+                .setDescription("Start Rang")
+                .setRequired(true)
+                .addChoices(...rangAuswahl)
+        )
+        .addStringOption(option =>
+            option
+                .setName("grund")
+                .setDescription("Grund der Einstellung")
+                .setRequired(true)
+        ),
+
+
+    // BEFÖRDERUNG
     new SlashCommandBuilder()
         .setName("beförderung")
         .setDescription("Befördert einen Mitarbeiter")
@@ -42,8 +89,17 @@ module.exports = [
                 .setName("nachricht")
                 .setDescription("Optionale Nachricht")
                 .setRequired(false)
+        )
+        .addStringOption(option =>
+            option
+                .setName("lob")
+                .setDescription("Automatische Nachricht auswählen")
+                .setRequired(false)
+                .addChoices(...lobAuswahl)
         ),
 
+
+    // DEGRADIERUNG
     new SlashCommandBuilder()
         .setName("degradierung")
         .setDescription("Degradiert einen Mitarbeiter")
@@ -67,6 +123,8 @@ module.exports = [
                 .setRequired(true)
         ),
 
+
+    // KÜNDIGUNG
     new SlashCommandBuilder()
         .setName("kündigung")
         .setDescription("Kündigt einen Mitarbeiter")
