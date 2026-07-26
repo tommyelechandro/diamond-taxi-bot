@@ -36,10 +36,13 @@ client.once("ready", async () => {
     console.log(`Bot online als ${client.user.tag}`);
 
     try {
-        await rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands }
-        );
+await rest.put(
+    Routes.applicationGuildCommands(
+        client.user.id,
+        "1457890146753183918"
+    ),
+    { body: commands }
+);
 
         console.log("Slash-Befehle wurden registriert!");
     } catch (error) {
