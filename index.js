@@ -3,6 +3,24 @@ require("dotenv").config();
 const config = require("./config.js");
 const handleEvents = require("./events.js");
 const http = require("http");
+const ranks = [
+    "Praktikant",
+    "Junior Fahrer",
+    "Fahrer",
+    "Erfahrener Fahrer",
+    "Senior Fahrer",
+    "Diamond Fahrer Azubi",
+    "Diamond Fahrer",
+    "Erweiterter Schutzfahrer",
+    "Rechtsanwalt",
+    "Leitstelle",
+    "Security",
+    "Security Chef",
+    "Personalleitung",
+    "Geschäftsleitung Airport",
+    "Geschäftsleitung",
+    "CEO"
+];
 
 const client = new Client({
     intents: [
@@ -34,21 +52,3 @@ http.createServer((req, res) => {
 }).listen(3000);
 client.on("interactionCreate", handleEvents);
 client.login(process.env.TOKEN);
-const ranks = [
-    "Praktikant",
-    "Junior Fahrer",
-    "Fahrer",
-    "Erfahrener Fahrer",
-    "Senior Fahrer",
-    "Diamond Fahrer Azubi",
-    "Diamond Fahrer",
-    "Erweiterter Schutzfahrer",
-    "Rechtsanwalt",
-    "Leitstelle",
-    "Security",
-    "Security Chef",
-    "Personalleitung",
-    "Geschäftsleitung Airport",
-    "Geschäftsleitung",
-    "CEO"
-];
