@@ -1,85 +1,54 @@
-const { SlashCommandBuilder } = require("discord.js");
-
-const rangAuswahl = [
-    { name: "Praktikant", value: "Praktikant" },
-    { name: "Junior Fahrer", value: "Junior Fahrer" },
-    { name: "Fahrer", value: "Fahrer" },
-    { name: "Erfahrener Fahrer", value: "Erfahrener Fahrer" },
-    { name: "Senior Fahrer", value: "Senior Fahrer" },
-    { name: "Diamond Fahrer Azubi", value: "Diamond Fahrer Azubi" },
-    { name: "Diamond Fahrer", value: "Diamond Fahrer" },
-    { name: "Erweiterter Schutzfahrer", value: "Erweiterter Schutzfahrer" },
-    { name: "Rechtsanwalt", value: "Rechtsanwalt" },
-    { name: "Leitstelle", value: "Leitstelle" },
-    { name: "Security", value: "Security" },
-    { name: "Security Chef", value: "Security Chef" },
-    { name: "Personalleitung", value: "Personalleitung" },
-    { name: "Geschäftsleitung Airport", value: "Geschäftsleitung Airport" },
-    { name: "Geschäftsleitung", value: "Geschäftsleitung" },
-    { name: "CEO", value: "CEO" }
+const { Client, GatewayIntentBits } = require("discord.js");
+require("dotenv").config();
+const config = require("./config.js");
+const handleEvents = require("./events.js");
+const http = require("http");
+const ranks = [
+    "Praktikant",
+    "Junior Fahrer",
+    "Fahrer",
+    "Erfahrener Fahrer",
+    "Senior Fahrer",
+    "Diamond Fahrer Azubi",
+    "Diamond Fahrer",
+    "Erweiterter Schutzfahrer",
+    "Rechtsanwalt",
+    "Leitstelle",
+    "Security",
+    "Security Chef",
+    "Personalleitung",
+    "Geschäftsleitung Airport",
+    "Geschäftsleitung",
+    "CEO"
 ];
 
-module.exports = [
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers
+    ]
+});
+const { REST, Routes } = require("discord.js");
+const commands = require("./commands.js");
 
-    new SlashCommandBuilder()
-        .setName("beförderung")
-        .setDescription("Befördert einen Mitarbeiter")
-        .addUserOption(option =>
-            option
-                .setName("mitarbeiter")
-                .setDescription("Mitarbeiter auswählen")
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option
-                .setName("rang")
-                .setDescription("Neuer Rang")
-                .setRequired(true)
-                .addChoices(...rangAuswahl)
-        )
-        .addStringOption(option =>
-            option
-                .setName("nachricht")
-                .setDescription("Optionale Nachricht")
-                .setRequired(false)
-        ),
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+client.once("ready", async () => {
+    console.log(`Bot online als ${client.user.tag}`);
 
-    new SlashCommandBuilder()
-        .setName("degradierung")
-        .setDescription("Degradiert einen Mitarbeiter")
-        .addUserOption(option =>
-            option
-                .setName("mitarbeiter")
-                .setDescription("Mitarbeiter auswählen")
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option
-                .setName("rang")
-                .setDescription("Neuer Rang")
-                .setRequired(true)
-                .addChoices(...rangAuswahl)
-        )
-        .addStringOption(option =>
-            option
-                .setName("grund")
-                .setDescription("Grund der Degradierung")
-                .setRequired(true)
-        ),
+    try {
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands }
+        );
 
-    new SlashCommandBuilder()
-        .setName("kündigung")
-        .setDescription("Kündigt einen Mitarbeiter")
-        .addUserOption(option =>
-            option
-                .setName("mitarbeiter")
-                .setDescription("Mitarbeiter auswählen")
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option
-                .setName("grund")
-                .setDescription("Grund der Kündigung")
-                .setRequired(true)
-        )
-];
+        console.log("Slash-Befehle wurden registriert!");
+    } catch (error) {
+        console.error(error);
+    }
+});
+http.createServer((req, res) => {
+    res.write("Diamond Taxi Bot läuft!");
+    res.end();
+}).listen(3000);
+client.on("interactionCreate", handleEvents);
+client.login(process.env.TOKEN);
