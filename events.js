@@ -368,4 +368,3 @@ module.exports = async (interaction) => {
         }
     }
 };
-};
