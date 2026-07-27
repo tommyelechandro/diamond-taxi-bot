@@ -1,11 +1,104 @@
 const { EmbedBuilder } = require("discord.js");
 const config = require("./config.js");
 
+// Eindeutiger Marker im Footer, damit wir die alte Teamliste-Nachricht
+// wiederfinden und editieren statt jedes Mal eine neue zu senden.
+const TEAMLISTE_MARKER = "diamond-taxi-teamliste";
+
+
+// ======================
+// TEAMLISTE (automatisch)
+// ======================
+async function aktualisiereTeamliste(guild) {
+
+    // Kanal noch nicht konfiguriert -> einfach überspringen
+    if (!config.teamUpdateKanal || config.teamUpdateKanal === "HIER_KANAL_ID_EINTRAGEN") {
+        return;
+    }
+
+    let kanal;
+
+    try {
+        kanal = await guild.channels.fetch(config.teamUpdateKanal);
+    } catch (error) {
+        console.error("Team-Update-Kanal konnte nicht geladen werden:", error.message);
+        return;
+    }
+
+    if (!kanal) return;
+
+    // Alle Mitglieder laden (benötigt "Server Members Intent" im Dev Portal)
+    await guild.members.fetch();
+
+    const felder = [];
+
+    for (const [rang, rollenID] of Object.entries(config.rollen)) {
+
+        const rolle = guild.roles.cache.get(rollenID);
+        if (!rolle) continue;
+
+        const mitglieder = rolle.members.map(m => `<@${m.id}>`);
+
+        if (mitglieder.length > 0) {
+            felder.push({
+                name: `${rang} (${mitglieder.length})`,
+                value: mitglieder.join("\n").slice(0, 1024) // Discord Feld-Limit
+            });
+        }
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle("🚕💎 Diamond Taxi – Teamliste")
+        .setColor(0x1abc9c)
+        .setDescription(
+            felder.length > 0
+                ? "Aktuelle Mitarbeiter, sortiert nach Rang:"
+                : "Aktuell sind keine Mitarbeiter eingetragen."
+        )
+        .addFields(felder.slice(0, 25)) // Discord Embed-Limit: max. 25 Felder
+        .setFooter({ text: TEAMLISTE_MARKER })
+        .setTimestamp();
+
+    try {
+
+        const nachrichten = await kanal.messages.fetch({ limit: 50 });
+
+        const alteTeamliste = nachrichten.find(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === TEAMLISTE_MARKER
+        );
+
+        if (alteTeamliste) {
+            await alteTeamliste.edit({ embeds: [embed] });
+        } else {
+            await kanal.send({ embeds: [embed] });
+        }
+
+    } catch (error) {
+        console.error("Teamliste konnte nicht gesendet/aktualisiert werden:", error.message);
+    }
+}
+
+
 module.exports = async (interaction) => {
 
     if (!interaction.isChatInputCommand()) return;
 
     try {
+
+        // ======================
+        // TEAMLISTE (manuell)
+        // ======================
+        if (interaction.commandName === "teamliste") {
+
+            await interaction.deferReply({ ephemeral: true });
+            await aktualisiereTeamliste(interaction.guild);
+
+            return interaction.editReply({
+                content: "✅ Teamliste wurde aktualisiert."
+            });
+        }
+
 
         const user = interaction.options.getMember("mitarbeiter");
 
@@ -102,9 +195,17 @@ module.exports = async (interaction) => {
                 .setTimestamp();
 
 
-            return interaction.reply({
+            await interaction.reply({
                 embeds: [embed]
             });
+
+            try {
+                await aktualisiereTeamliste(interaction.guild);
+            } catch (error) {
+                console.error("Teamliste-Update fehlgeschlagen:", error.message);
+            }
+
+            return;
         }
 
 
@@ -141,9 +242,17 @@ module.exports = async (interaction) => {
                 .setTimestamp();
 
 
-            return interaction.reply({
+            await interaction.reply({
                 embeds: [embed]
             });
+
+            try {
+                await aktualisiereTeamliste(interaction.guild);
+            } catch (error) {
+                console.error("Teamliste-Update fehlgeschlagen:", error.message);
+            }
+
+            return;
         }
 
 
@@ -172,9 +281,17 @@ module.exports = async (interaction) => {
                 .setTimestamp();
 
 
-            return interaction.reply({
+            await interaction.reply({
                 embeds: [embed]
             });
+
+            try {
+                await aktualisiereTeamliste(interaction.guild);
+            } catch (error) {
+                console.error("Teamliste-Update fehlgeschlagen:", error.message);
+            }
+
+            return;
         }
 
 
@@ -219,9 +336,17 @@ module.exports = async (interaction) => {
                 .setTimestamp();
 
 
-            return interaction.reply({
+            await interaction.reply({
                 embeds: [embed]
             });
+
+            try {
+                await aktualisiereTeamliste(interaction.guild);
+            } catch (error) {
+                console.error("Teamliste-Update fehlgeschlagen:", error.message);
+            }
+
+            return;
         }
 
 
@@ -242,4 +367,5 @@ module.exports = async (interaction) => {
 
         }
     }
+};
 };
