@@ -135,6 +135,11 @@ module.exports = [
                 .setName("grund")
                 .setDescription("Grund der Kündigung")
                 .setRequired(true)
-        )
+        ),
+
+
+    new SlashCommandBuilder()
+        .setName("teamliste")
+        .setDescription("Aktualisiert die Teamliste im Team-Update-Kanal manuell")
 
 ];
