@@ -1,4 +1,5 @@
-const { EmbedBuilder } = require("discord.js");
+cat > /home/claude/bot/events.js << 'EOF'
+const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder } = require("discord.js");
 const config = require("./config.js");
 
 // Eindeutige Marker im Footer, damit wir alte Bot-Nachrichten wiederfinden
@@ -6,6 +7,30 @@ const config = require("./config.js");
 const TEAMLISTE_MARKER = "diamond-taxi-teamliste";
 const BEWERBUNG_MARKER = "diamond-taxi-bewerbungsphase";
 const GEBURTSTAGS_MARKER = "diamond-taxi-geburtstagsliste";
+
+
+function formatBetrag(zahl) {
+    return zahl.toLocaleString("de-DE") + " $";
+}
+
+
+// Datum im Format TT.MM.JJJJ -> Date-Objekt (für Frist / Wiedereröffnung)
+function parseDatumMitJahr(input, defaultStunde, defaultMinute) {
+
+    const match = /^([0-9]{1,2})\.([0-9]{1,2})\.([0-9]{4})$/.exec(input.trim());
+    if (!match) return null;
+
+    const tag = parseInt(match[1], 10);
+    const monat = parseInt(match[2], 10);
+    const jahr = parseInt(match[3], 10);
+
+    if (monat < 1 || monat > 12) return null;
+
+    const tageProMonat = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (tag < 1 || tag > tageProMonat[monat - 1]) return null;
+
+    return new Date(jahr, monat - 1, tag, defaultStunde, defaultMinute, 0);
+}
 
 
 // ======================
@@ -81,9 +106,9 @@ async function aktualisiereTeamliste(guild) {
 
 
 // ======================
-// BEWERBUNGSPHASE (live Status)
+// BEWERBUNGSPHASE (live Status + Countdown)
 // ======================
-async function aktualisiereBewerbungsStatus(guild, status) {
+async function aktualisiereBewerbungsStatus(guild, status, wiederoeffnungInput) {
 
     const kanalID =
         (config.bewerbungsKanal && config.bewerbungsKanal !== "HIER_KANAL_ID_EINTRAGEN")
@@ -107,6 +132,16 @@ async function aktualisiereBewerbungsStatus(guild, status) {
 
     const istOffen = status === "offen";
 
+    const bildOffen =
+        (config.bewerbungsphaseBildOffen && config.bewerbungsphaseBildOffen !== "HIER_BILD_URL_EINTRAGEN")
+            ? config.bewerbungsphaseBildOffen
+            : "https://placehold.co/700x150/2ecc71/ffffff.png?text=Bewerbungsphase+OFFEN";
+
+    const bildGeschlossen =
+        (config.bewerbungsphaseBildGeschlossen && config.bewerbungsphaseBildGeschlossen !== "HIER_BILD_URL_EINTRAGEN")
+            ? config.bewerbungsphaseBildGeschlossen
+            : "https://placehold.co/700x150/e74c3c/ffffff.png?text=Bewerbungsphase+GESCHLOSSEN";
+
     const embed = new EmbedBuilder()
         .setTitle(istOffen ? "🟢 Bewerbungsphase: OFFEN" : "🔴 Bewerbungsphase: GESCHLOSSEN")
         .setColor(istOffen ? 0x2ecc71 : 0xe74c3c)
@@ -115,13 +150,22 @@ async function aktualisiereBewerbungsStatus(guild, status) {
                 ? "Wir suchen aktuell aktiv nach neuen Mitarbeitern! Öffnet ein Ticket, um euch zu bewerben."
                 : "Aktuell nehmen wir keine neuen Bewerbungen an. Schaut später wieder vorbei!"
         )
-        .setImage(
-            istOffen
-                ? "https://placehold.co/700x150/2ecc71/ffffff.png?text=Bewerbungsphase+OFFEN"
-                : "https://placehold.co/700x150/e74c3c/ffffff.png?text=Bewerbungsphase+GESCHLOSSEN"
-        )
+        .setImage(istOffen ? bildOffen : bildGeschlossen)
         .setFooter({ text: BEWERBUNG_MARKER })
         .setTimestamp();
+
+    if (!istOffen && wiederoeffnungInput) {
+
+        const datum = parseDatumMitJahr(wiederoeffnungInput, 9, 0);
+
+        if (datum) {
+            const unix = Math.floor(datum.getTime() / 1000);
+            embed.addFields({
+                name: "Wieder offen ab",
+                value: `<t:${unix}:F>  (<t:${unix}:R>)`
+            });
+        }
+    }
 
     try {
 
@@ -307,9 +351,75 @@ async function pruefeGeburtstage(guild) {
 // ======================
 const handleInteraction = async (interaction) => {
 
-    if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu()) return;
 
     try {
+
+        // ======================
+        // SANKTIONS-AUSWAHLMENÜ (Mehrfachauswahl-Antwort)
+        // ======================
+        if (interaction.isStringSelectMenu()) {
+
+            if (!interaction.customId.startsWith("sanktion_select|")) return;
+
+            const [, zielUserId, fristUnixStr] = interaction.customId.split("|");
+            const fristUnix = parseInt(fristUnixStr, 10);
+
+            const ausgewaehlt = interaction.values
+                .map(v => config.sanktionen.find(s => String(s.paragraph) === v))
+                .filter(Boolean);
+
+            const gesamtbetrag = ausgewaehlt.reduce((summe, s) => summe + s.betrag, 0);
+
+            const gruendeText = ausgewaehlt
+                .map(s => `§${s.paragraph} – ${s.text} (${formatBetrag(s.betrag)})`)
+                .join("\n");
+
+            if (!config.sanktionsKanal || config.sanktionsKanal === "HIER_KANAL_ID_EINTRAGEN") {
+                return interaction.update({
+                    content: "❌ Kein Sanktions-Kanal in config.js eingetragen.",
+                    components: []
+                });
+            }
+
+            const kanal = await interaction.guild.channels.fetch(config.sanktionsKanal);
+            const markerText = `diamond-taxi-sanktion-offen-${zielUserId}-${Date.now()}`;
+
+            const embed = new EmbedBuilder()
+                .setTitle("⚖️ Sanktion")
+                .setColor(0xe67e22)
+                .addFields(
+                    { name: "Mitarbeiter", value: `<@${zielUserId}>` },
+                    { name: "Verstöße", value: gruendeText.slice(0, 1024) },
+                    { name: "Gesamtbetrag", value: formatBetrag(gesamtbetrag) },
+                    { name: "Ausgestellt von", value: `<@${interaction.user.id}>` },
+                    { name: "Frist", value: `<t:${fristUnix}:F>  (<t:${fristUnix}:R>)` },
+                    { name: "Status", value: "🟡 Offen" }
+                )
+                .setFooter({ text: markerText })
+                .setTimestamp();
+
+            await kanal.send({ embeds: [embed] });
+
+            try {
+                const zielUser = await interaction.client.users.fetch(zielUserId);
+                await zielUser.send(
+                    `⚖️ Du wurdest bei Diamond Taxi sanktioniert.\n\n` +
+                    `**Verstöße:**\n${gruendeText}\n\n` +
+                    `**Gesamtbetrag:** ${formatBetrag(gesamtbetrag)}\n` +
+                    `**Frist:** <t:${fristUnix}:F> (<t:${fristUnix}:R>)\n\n` +
+                    `Bitte begleiche den Betrag fristgerecht.`
+                );
+            } catch (error) {
+                console.error("DM an sanktionierten Mitarbeiter fehlgeschlagen:", error.message);
+            }
+
+            return interaction.update({
+                content: `✅ Sanktion für <@${zielUserId}> wurde ausgestellt und in <#${kanal.id}> gepostet.`,
+                components: []
+            });
+        }
+
 
         // ======================
         // TEAMLISTE (manuell)
@@ -332,10 +442,11 @@ const handleInteraction = async (interaction) => {
 
             const status = interaction.options.getString("status");
             const eigeneNachricht = interaction.options.getString("nachricht");
+            const wiederoeffnung = interaction.options.getString("wiederoeffnung");
 
             await interaction.deferReply({ ephemeral: true });
 
-            const kanal = await aktualisiereBewerbungsStatus(interaction.guild, status);
+            const kanal = await aktualisiereBewerbungsStatus(interaction.guild, status, wiederoeffnung);
 
             if (!kanal) {
                 return interaction.editReply({
@@ -384,6 +495,202 @@ const handleInteraction = async (interaction) => {
             } catch (error) {
                 return interaction.editReply({ content: "❌ Fehler: " + error.message });
             }
+        }
+
+
+        // ======================
+        // ANKÜNDIGUNG
+        // ======================
+        if (interaction.commandName === "ankündigung") {
+
+            const text = interaction.options.getString("text");
+
+            if (!config.ankuendigungsKanal || config.ankuendigungsKanal === "HIER_KANAL_ID_EINTRAGEN") {
+                return interaction.reply({
+                    content: "❌ Kein Ankündigungs-Kanal in config.js eingetragen.",
+                    ephemeral: true
+                });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const kanal = await interaction.guild.channels.fetch(config.ankuendigungsKanal);
+
+            const embed = new EmbedBuilder()
+                .setTitle("📢 Ankündigung")
+                .setDescription(text)
+                .setColor(0x3498db)
+                .setTimestamp();
+
+            const nachricht = await kanal.send({ embeds: [embed] });
+            await nachricht.react("✅");
+
+            return interaction.editReply({ content: "✅ Ankündigung wurde gepostet." });
+        }
+
+
+        // ======================
+        // TEAMBESPRECHUNG
+        // ======================
+        if (interaction.commandName === "teambesprechung") {
+
+            const datum = interaction.options.getString("datum");
+            const ort = interaction.options.getString("ort");
+            const uhrzeit = interaction.options.getString("uhrzeit");
+            const info = interaction.options.getString("info");
+
+            if (!config.teambesprechungKanal || config.teambesprechungKanal === "HIER_KANAL_ID_EINTRAGEN") {
+                return interaction.reply({
+                    content: "❌ Kein Teambesprechungs-Kanal in config.js eingetragen.",
+                    ephemeral: true
+                });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const kanal = await interaction.guild.channels.fetch(config.teambesprechungKanal);
+
+            const embed = new EmbedBuilder()
+                .setTitle("🗓️ Teambesprechung")
+                .setColor(0x9b59b6)
+                .addFields(
+                    { name: "Datum", value: datum, inline: true },
+                    { name: "Uhrzeit", value: uhrzeit || "Noch offen", inline: true },
+                    { name: "Ort", value: ort }
+                )
+                .setDescription(info || "Bitte reagiert mit ✅ oder ❌, ob ihr teilnehmen könnt.")
+                .setTimestamp();
+
+            const nachricht = await kanal.send({ embeds: [embed] });
+            await nachricht.react("✅");
+            await nachricht.react("❌");
+
+            await interaction.guild.members.fetch();
+
+            const mitarbeiterRolle = interaction.guild.roles.cache.get(config.mitarbeiterRolle);
+
+            let dmErfolgreich = 0;
+            let dmFehlgeschlagen = 0;
+
+            if (mitarbeiterRolle) {
+
+                for (const [, mitglied] of mitarbeiterRolle.members) {
+
+                    try {
+                        await mitglied.send(
+                            `Hallo ${mitglied.displayName},\n\n` +
+                            `wir haben bald eine Teambesprechung am **${datum}**` +
+                            (uhrzeit ? ` um **${uhrzeit}**` : "") +
+                            ` bei **${ort}**.\n` +
+                            (info ? `${info}\n\n` : "\n") +
+                            `Kommst du oder kommst du nicht? Falls du nicht kommen kannst, melde dich bitte im Kanal ab.`
+                        );
+                        dmErfolgreich++;
+                    } catch (error) {
+                        dmFehlgeschlagen++;
+                    }
+                }
+            }
+
+            return interaction.editReply({
+                content:
+                    `✅ Teambesprechung wurde gepostet. ${dmErfolgreich} Mitarbeiter per DM benachrichtigt` +
+                    (dmFehlgeschlagen > 0 ? `, ${dmFehlgeschlagen} DMs fehlgeschlagen (evtl. DMs deaktiviert).` : ".")
+            });
+        }
+
+
+        // ======================
+        // SANKTION (ausstellen / bezahlt)
+        // ======================
+        if (interaction.commandName === "sanktion") {
+
+            const sub = interaction.options.getSubcommand();
+
+
+            if (sub === "ausstellen") {
+
+                const zielMitglied = interaction.options.getMember("mitarbeiter");
+                const fristInput = interaction.options.getString("frist");
+
+                const fristDatum = parseDatumMitJahr(fristInput, 23, 59);
+
+                if (!fristDatum) {
+                    return interaction.reply({
+                        content: "❌ Bitte gib die Frist im Format TT.MM.JJJJ an, z. B. `30.07.2026`.",
+                        ephemeral: true
+                    });
+                }
+
+                const fristUnix = Math.floor(fristDatum.getTime() / 1000);
+
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`sanktion_select|${zielMitglied.id}|${fristUnix}`)
+                    .setPlaceholder("Verstöße auswählen (mehrere möglich)")
+                    .setMinValues(1)
+                    .setMaxValues(config.sanktionen.length)
+                    .addOptions(
+                        config.sanktionen.map(s => ({
+                            label: `§${s.paragraph} – ${s.text}`.slice(0, 100),
+                            description: formatBetrag(s.betrag),
+                            value: String(s.paragraph)
+                        }))
+                    );
+
+                const row = new ActionRowBuilder().addComponents(selectMenu);
+
+                return interaction.reply({
+                    content: `Wähle einen oder mehrere Verstöße für <@${zielMitglied.id}> aus:`,
+                    components: [row],
+                    ephemeral: true
+                });
+            }
+
+
+            if (sub === "bezahlt") {
+
+                const zielMitglied = interaction.options.getMember("mitarbeiter");
+
+                await interaction.deferReply({ ephemeral: true });
+
+                if (!config.sanktionsKanal || config.sanktionsKanal === "HIER_KANAL_ID_EINTRAGEN") {
+                    return interaction.editReply({ content: "❌ Kein Sanktions-Kanal in config.js eingetragen." });
+                }
+
+                const kanal = await interaction.guild.channels.fetch(config.sanktionsKanal);
+                const nachrichten = await kanal.messages.fetch({ limit: 100 });
+
+                const offeneSanktionen = nachrichten.filter(msg =>
+                    msg.author.id === interaction.guild.client.user.id &&
+                    msg.embeds[0]?.footer?.text?.startsWith(`diamond-taxi-sanktion-offen-${zielMitglied.id}-`)
+                );
+
+                if (offeneSanktionen.size === 0) {
+                    return interaction.editReply({ content: "ℹ️ Keine offene Sanktion für diesen Mitarbeiter gefunden." });
+                }
+
+                for (const msg of offeneSanktionen.values()) {
+
+                    const altesEmbed = msg.embeds[0];
+
+                    const neueFelder = altesEmbed.fields.map(f =>
+                        f.name === "Status" ? { name: "Status", value: "✅ Bezahlt" } : { name: f.name, value: f.value, inline: f.inline }
+                    );
+
+                    const neuesEmbed = EmbedBuilder.from(altesEmbed)
+                        .setColor(0x2ecc71)
+                        .setFields(neueFelder)
+                        .setFooter({ text: altesEmbed.footer.text.replace("-offen-", "-bezahlt-") });
+
+                    await msg.edit({ embeds: [neuesEmbed] });
+                }
+
+                return interaction.editReply({
+                    content: `✅ ${offeneSanktionen.size} Sanktion(en) für <@${zielMitglied.id}> als bezahlt markiert.`
+                });
+            }
+
+            return;
         }
 
 
@@ -472,6 +779,17 @@ const handleInteraction = async (interaction) => {
 
 
             await gebeRang(user, rang);
+
+
+            try {
+                await user.send(
+                    `🚕💎 Herzlich willkommen bei Diamond Taxi!\n\n` +
+                    `Wir freuen uns, dass du dich bei uns beworben hast – du wurdest jetzt herzlich als **${rang}** angenommen!\n\n` +
+                    `Bei Fragen kannst du dich jederzeit an uns wenden.`
+                );
+            } catch (error) {
+                console.error("Willkommens-DM fehlgeschlagen:", error.message);
+            }
 
 
             const embed = new EmbedBuilder()
@@ -593,6 +911,16 @@ const handleInteraction = async (interaction) => {
         if (interaction.commandName === "kündigung") {
 
             const grund = interaction.options.getString("grund");
+
+
+            try {
+                await user.send(
+                    `Schade, dass du uns verlässt.\n\n` +
+                    `Trotzdem wünscht dir das Diamond Taxi und Tommy Elechandro viel Erfolg für deine Zukunft!`
+                );
+            } catch (error) {
+                console.error("Abschieds-DM fehlgeschlagen:", error.message);
+            }
 
 
             await entferneRang(user);
