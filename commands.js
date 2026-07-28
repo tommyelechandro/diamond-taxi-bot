@@ -140,6 +140,38 @@ module.exports = [
 
     new SlashCommandBuilder()
         .setName("teamliste")
-        .setDescription("Aktualisiert die Teamliste im Team-Update-Kanal manuell")
+        .setDescription("Aktualisiert die Teamliste im Team-Update-Kanal manuell"),
+
+
+    new SlashCommandBuilder()
+        .setName("bewerbungsphase")
+        .setDescription("Setzt den Live-Status der Bewerbungsphase")
+        .addStringOption(option =>
+            option
+                .setName("status")
+                .setDescription("Offen oder geschlossen")
+                .setRequired(true)
+                .addChoices(
+                    { name: "Offen", value: "offen" },
+                    { name: "Geschlossen", value: "geschlossen" }
+                )
+        )
+        .addStringOption(option =>
+            option
+                .setName("nachricht")
+                .setDescription("Eigene Ankündigungs-Nachricht (nur bei 'Offen')")
+                .setRequired(false)
+        ),
+
+
+    new SlashCommandBuilder()
+        .setName("geburtstag")
+        .setDescription("Speichert deinen Geburtstag für die automatische Glückwunsch-Erinnerung")
+        .addStringOption(option =>
+            option
+                .setName("datum")
+                .setDescription("Dein Geburtstag im Format TT.MM, z. B. 24.12")
+                .setRequired(true)
+        )
 
 ];

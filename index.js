@@ -7,6 +7,7 @@ const {
 
 require("dotenv").config();
 
+const config = require("./config.js");
 const commands = require("./commands.js");
 const handleEvents = require("./events.js");
 const http = require("http");
@@ -35,12 +36,8 @@ client.once("ready", async () => {
 
     try {
 
-        // WICHTIG: Zuerst alle GLOBALEN Befehle löschen. Falls die Befehle
-        // früher mal global registriert wurden (Routes.applicationCommands)
-        // UND jetzt zusätzlich pro Server registriert werden, zeigt Discord
-        // beide Versionen gleichzeitig an -> das war die Ursache für die
-        // doppelt angezeigten Befehle. Ein leeres Array zu setzen ist
-        // ungefährlich und kann bei jedem Start stehen bleiben.
+        // Alte GLOBALE Befehle löschen (verhindert doppelte Anzeige,
+        // falls früher versehentlich global UND pro Server registriert wurde)
         await rest.put(
             Routes.applicationCommands(client.user.id),
             { body: [] }
@@ -51,7 +48,7 @@ client.once("ready", async () => {
 
             Routes.applicationGuildCommands(
                 client.user.id,
-                "1457890146753183918"
+                config.serverId
             ),
 
             {
@@ -70,6 +67,20 @@ client.once("ready", async () => {
 
     }
 
+
+    // Geburtstags-Check: einmal direkt beim Start, danach alle 12 Stunden
+    const geburtstagsCheck = async () => {
+
+        const guild = client.guilds.cache.get(config.serverId);
+
+        if (guild && handleEvents.pruefeGeburtstage) {
+            await handleEvents.pruefeGeburtstage(guild);
+        }
+    };
+
+    geburtstagsCheck();
+    setInterval(geburtstagsCheck, 12 * 60 * 60 * 1000);
+
 });
 
 
@@ -87,9 +98,6 @@ http.createServer((req, res) => {
 // Selbst-Ping alle 10 Minuten, damit Render den kostenlosen Web Service
 // nicht wegen Inaktivität abschaltet (nur aktiv, wenn RENDER_EXTERNAL_URL
 // gesetzt ist - das passiert automatisch auf Render, lokal nicht).
-// Empfehlung zusätzlich: einen kostenlosen externen Monitor wie
-// UptimeRobot oder cron-job.org auf dieselbe URL einrichten - das ist
-// zuverlässiger, da Render selbst keinen offiziellen Weg dafür anbietet.
 if (process.env.RENDER_EXTERNAL_URL) {
 
     setInterval(() => {

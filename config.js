@@ -1,14 +1,25 @@
 module.exports = {
 
+    // Server (Guild) ID - für Command-Registrierung & den Geburtstags-Check
+    serverId: "1457890146753183918",
+
     // Rollen
     mitarbeiterRolle: "1482761223497056369",
     leitungRolle: "1489698355507499169",
 
-    // Kanal für automatische Team-Updates
-    // WICHTIG: Hier die echte Kanal-ID eintragen (Rechtsklick auf den Kanal -> ID kopieren,
-    // Entwicklermodus muss in Discord unter Einstellungen -> Erweitert aktiviert sein).
-    // Solange hier der Platzhalter steht, wird die Teamliste einfach übersprungen.
+    // Bürgerrolle: wird vom Bot NIEMALS entfernt oder verändert.
+    // Egal ob Einstellung, Beförderung, Degradierung oder Kündigung - diese Rolle bleibt immer bestehen.
+    bürgerRolle: "1458078659113128090",
+
+    // Kanal für die automatische Teamliste
     teamUpdateKanal: "HIER_KANAL_ID_EINTRAGEN",
+
+    // Kanal für die Live-Anzeige der Bewerbungsphase.
+    // Platzhalter stehen lassen, um stattdessen den teamUpdateKanal zu benutzen.
+    bewerbungsKanal: "HIER_KANAL_ID_EINTRAGEN",
+
+    // Kanal, in dem die Geburtstagsliste gespeichert wird und Glückwünsche gepostet werden
+    geburtstagsKanal: "HIER_KANAL_ID_EINTRAGEN",
 
 
     // Leitungsebene Rollen
