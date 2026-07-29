@@ -1,4 +1,10 @@
-const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder } = require("discord.js");
+const {
+    EmbedBuilder,
+    StringSelectMenuBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
+} = require("discord.js");
 const config = require("./config.js");
 
 // Eindeutige Marker im Footer, damit wir alte Bot-Nachrichten wiederfinden
@@ -6,6 +12,8 @@ const config = require("./config.js");
 const TEAMLISTE_MARKER = "diamond-taxi-teamliste";
 const BEWERBUNG_MARKER = "diamond-taxi-bewerbungsphase";
 const GEBURTSTAGS_MARKER = "diamond-taxi-geburtstagsliste";
+const ABMELDUNG_MARKER = "diamond-taxi-abmeldeliste";
+const LOTTO_MARKER_EINTRAEGE = "diamond-taxi-lotto-eintraege";
 
 
 function formatBetrag(zahl) {
@@ -13,7 +21,7 @@ function formatBetrag(zahl) {
 }
 
 
-// Datum im Format TT.MM.JJJJ -> Date-Objekt (für Frist / Wiedereröffnung)
+// Datum im Format TT.MM.JJJJ -> Date-Objekt
 function parseDatumMitJahr(input, defaultStunde, defaultMinute) {
 
     const match = /^([0-9]{1,2})\.([0-9]{1,2})\.([0-9]{4})$/.exec(input.trim());
@@ -33,7 +41,7 @@ function parseDatumMitJahr(input, defaultStunde, defaultMinute) {
 
 
 // ======================
-// TEAMLISTE (automatisch)
+// TEAMLISTE (automatisch, CEO oben - Praktikant unten)
 // ======================
 async function aktualisiereTeamliste(guild) {
 
@@ -56,6 +64,7 @@ async function aktualisiereTeamliste(guild) {
 
     const felder = [];
 
+    // Object.entries behält die Reihenfolge aus config.js -> dort steht CEO zuerst
     for (const [rang, rollenID] of Object.entries(config.rollen)) {
 
         const rolle = guild.roles.cache.get(rollenID);
@@ -76,7 +85,7 @@ async function aktualisiereTeamliste(guild) {
         .setColor(0x1abc9c)
         .setDescription(
             felder.length > 0
-                ? "Aktuelle Mitarbeiter, sortiert nach Rang:"
+                ? "Aktuelle Mitarbeiter, sortiert nach Rang (höchster zuerst):"
                 : "Aktuell sind keine Mitarbeiter eingetragen."
         )
         .addFields(felder.slice(0, 25))
@@ -105,9 +114,27 @@ async function aktualisiereTeamliste(guild) {
 
 
 // ======================
-// BEWERBUNGSPHASE (live Status + Countdown)
+// BEWERBUNGSPHASE (live Status + Countdown + Bild + LIVE-Button)
 // ======================
-async function aktualisiereBewerbungsStatus(guild, status, wiederoeffnungInput) {
+async function holeBewerbungsBild(guild, nachrichtID) {
+
+    try {
+
+        if (!config.bewerbungsphaseBilderKanal || !nachrichtID) return null;
+
+        const bilderKanal = await guild.channels.fetch(config.bewerbungsphaseBilderKanal);
+        const nachricht = await bilderKanal.messages.fetch(nachrichtID);
+
+        return nachricht.attachments.first()?.url || null;
+
+    } catch (error) {
+        console.error("Bewerbungsphase-Bild konnte nicht geladen werden:", error.message);
+        return null;
+    }
+}
+
+
+async function aktualisiereBewerbungsStatus(guild, status, terminInput) {
 
     const kanalID =
         (config.bewerbungsKanal && config.bewerbungsKanal !== "HIER_KANAL_ID_EINTRAGEN")
@@ -131,15 +158,13 @@ async function aktualisiereBewerbungsStatus(guild, status, wiederoeffnungInput) 
 
     const istOffen = status === "offen";
 
-    const bildOffen =
-        (config.bewerbungsphaseBildOffen && config.bewerbungsphaseBildOffen !== "HIER_BILD_URL_EINTRAGEN")
-            ? config.bewerbungsphaseBildOffen
-            : "https://placehold.co/700x150/2ecc71/ffffff.png?text=Bewerbungsphase+OFFEN";
+    const bildFallbackOffen = "https://placehold.co/700x150/2ecc71/ffffff.png?text=Bewerbungsphase+OFFEN";
+    const bildFallbackGeschlossen = "https://placehold.co/700x150/e74c3c/ffffff.png?text=Bewerbungsphase+GESCHLOSSEN";
 
-    const bildGeschlossen =
-        (config.bewerbungsphaseBildGeschlossen && config.bewerbungsphaseBildGeschlossen !== "HIER_BILD_URL_EINTRAGEN")
-            ? config.bewerbungsphaseBildGeschlossen
-            : "https://placehold.co/700x150/e74c3c/ffffff.png?text=Bewerbungsphase+GESCHLOSSEN";
+    const bildUrl = await holeBewerbungsBild(
+        guild,
+        istOffen ? config.bewerbungsphaseNachrichtOffenID : config.bewerbungsphaseNachrichtGeschlossenID
+    ) || (istOffen ? bildFallbackOffen : bildFallbackGeschlossen);
 
     const embed = new EmbedBuilder()
         .setTitle(istOffen ? "🟢 Bewerbungsphase: OFFEN" : "🔴 Bewerbungsphase: GESCHLOSSEN")
@@ -149,22 +174,30 @@ async function aktualisiereBewerbungsStatus(guild, status, wiederoeffnungInput) 
                 ? "Wir suchen aktuell aktiv nach neuen Mitarbeitern! Öffnet ein Ticket, um euch zu bewerben."
                 : "Aktuell nehmen wir keine neuen Bewerbungen an. Schaut später wieder vorbei!"
         )
-        .setImage(istOffen ? bildOffen : bildGeschlossen)
+        .setImage(bildUrl)
         .setFooter({ text: BEWERBUNG_MARKER })
         .setTimestamp();
 
-    if (!istOffen && wiederoeffnungInput) {
+    if (terminInput) {
 
-        const datum = parseDatumMitJahr(wiederoeffnungInput, 9, 0);
+        const datum = parseDatumMitJahr(terminInput, istOffen ? 18 : 9, 0);
 
         if (datum) {
             const unix = Math.floor(datum.getTime() / 1000);
             embed.addFields({
-                name: "Wieder offen ab",
+                name: istOffen ? "Schließt voraussichtlich am" : "Wieder offen ab",
                 value: `<t:${unix}:F>  (<t:${unix}:R>)`
             });
         }
     }
+
+    const liveButton = new ButtonBuilder()
+        .setCustomId("bewerbungsphase_status_anzeige")
+        .setLabel(istOffen ? "🔴 LIVE" : "⚪ Geschlossen")
+        .setStyle(istOffen ? ButtonStyle.Danger : ButtonStyle.Secondary)
+        .setDisabled(true);
+
+    const row = new ActionRowBuilder().addComponents(liveButton);
 
     try {
 
@@ -176,9 +209,9 @@ async function aktualisiereBewerbungsStatus(guild, status, wiederoeffnungInput) 
         );
 
         if (alterStatus) {
-            await alterStatus.edit({ embeds: [embed] });
+            await alterStatus.edit({ embeds: [embed], components: [row] });
         } else {
-            await kanal.send({ embeds: [embed] });
+            await kanal.send({ embeds: [embed], components: [row] });
         }
 
     } catch (error) {
@@ -346,6 +379,296 @@ async function pruefeGeburtstage(guild) {
 
 
 // ======================
+// ABMELDELISTE (live, mit Rückkehr-Countdown)
+// ======================
+
+function parseAbmeldeZeile(zeile) {
+
+    const match = /^<@!?([0-9]+)>\s*-\s*<t:([0-9]+):d>\s*bis\s*<t:([0-9]+):d>\s*\(wieder da <t:[0-9]+:R>\)\s*-\s*Grund:\s*(.+)$/.exec(zeile.trim());
+    if (!match) return null;
+
+    return {
+        id: match[1],
+        vonUnix: parseInt(match[2], 10),
+        bisUnix: parseInt(match[3], 10),
+        grund: match[4]
+    };
+}
+
+
+function baueAbmeldeZeile(e) {
+    return `<@${e.id}> - <t:${e.vonUnix}:d> bis <t:${e.bisUnix}:d> (wieder da <t:${e.bisUnix}:R>) - Grund: ${e.grund}`;
+}
+
+
+async function aktualisiereAbmeldeliste(guild, neuerEintrag) {
+
+    if (!config.abmeldungKanal || config.abmeldungKanal === "HIER_KANAL_ID_EINTRAGEN") {
+        return null;
+    }
+
+    const kanal = await guild.channels.fetch(config.abmeldungKanal);
+    const nachrichten = await kanal.messages.fetch({ limit: 50 });
+
+    const alteListe = nachrichten.find(msg =>
+        msg.author.id === guild.client.user.id &&
+        msg.embeds[0]?.footer?.text === ABMELDUNG_MARKER
+    );
+
+    let eintraege = alteListe
+        ? (alteListe.embeds[0].fields[0]?.value || "").split("\n").map(parseAbmeldeZeile).filter(Boolean)
+        : [];
+
+    const jetzt = Math.floor(Date.now() / 1000);
+
+    // abgelaufene Abmeldungen automatisch entfernen
+    eintraege = eintraege.filter(e => e.bisUnix > jetzt);
+
+    if (neuerEintrag) {
+        eintraege = eintraege.filter(e => e.id !== neuerEintrag.id);
+        eintraege.push(neuerEintrag);
+    }
+
+    eintraege.sort((a, b) => a.bisUnix - b.bisUnix);
+
+    const embed = new EmbedBuilder()
+        .setTitle("📋 Aktuelle Abmeldungen")
+        .setColor(0x95a5a6)
+        .setDescription("Automatisch aktualisiert – abgelaufene Einträge verschwinden von selbst.")
+        .addFields({
+            name: "Abmeldungen",
+            value: eintraege.length > 0
+                ? eintraege.map(baueAbmeldeZeile).join("\n").slice(0, 1024)
+                : "Aktuell ist niemand abgemeldet."
+        })
+        .setFooter({ text: ABMELDUNG_MARKER })
+        .setTimestamp();
+
+    if (alteListe) {
+        await alteListe.edit({ embeds: [embed] });
+    } else {
+        await kanal.send({ embeds: [embed] });
+    }
+
+    return kanal;
+}
+
+
+async function bereinigeAbmeldungen(guild) {
+    try {
+        await aktualisiereAbmeldeliste(guild, null);
+    } catch (error) {
+        console.error("Abmeldeliste-Bereinigung fehlgeschlagen:", error.message);
+    }
+}
+
+
+// ======================
+// LOTTO
+// ======================
+
+function parseLottoZeilen(feldValue) {
+
+    if (!feldValue) return [];
+
+    return feldValue.split("\n").map(zeile => {
+
+        const match = /^<@!?([0-9]+)>\s*-\s*([0-9]+),\s*([0-9]+)$/.exec(zeile.trim());
+        if (!match) return null;
+
+        return { id: match[1], zahlen: [parseInt(match[2], 10), parseInt(match[3], 10)] };
+
+    }).filter(Boolean);
+}
+
+
+function baueLottoEmbed(eintraege) {
+
+    return new EmbedBuilder()
+        .setTitle("🎰 Diamond Taxi Lotto – Aktuelle Tipps")
+        .setColor(0x8e44ad)
+        .setDescription("Mit `/lotto` mitspielen! Ziehung jeden Mittwoch & Sonntag um 20 Uhr. Wähle 2 Zahlen von 1-10.")
+        .addFields({
+            name: "Teilnehmer",
+            value: eintraege.length > 0
+                ? eintraege.map(e => `<@${e.id}> - ${e.zahlen.join(", ")}`).join("\n").slice(0, 1024)
+                : "Noch keine Tipps abgegeben."
+        })
+        .setFooter({ text: LOTTO_MARKER_EINTRAEGE })
+        .setTimestamp();
+}
+
+
+async function trageLottoEintragEin(guild, userId, zahlen) {
+
+    const kanal = await guild.channels.fetch(config.lottoKanal);
+    const nachrichten = await kanal.messages.fetch({ limit: 50 });
+
+    const alteListe = nachrichten.find(msg =>
+        msg.author.id === guild.client.user.id &&
+        msg.embeds[0]?.footer?.text === LOTTO_MARKER_EINTRAEGE
+    );
+
+    let eintraege = alteListe
+        ? parseLottoZeilen(alteListe.embeds[0].fields[0]?.value)
+        : [];
+
+    eintraege = eintraege.filter(e => e.id !== userId);
+    eintraege.push({ id: userId, zahlen });
+
+    const embed = baueLottoEmbed(eintraege);
+
+    if (alteListe) {
+        await alteListe.edit({ embeds: [embed] });
+    } else {
+        await kanal.send({ embeds: [embed] });
+    }
+}
+
+
+async function ziehungDurchfuehren(guild) {
+
+    try {
+
+        if (!config.lottoKanal || config.lottoKanal === "HIER_KANAL_ID_EINTRAGEN") return;
+
+        const kanal = await guild.channels.fetch(config.lottoKanal);
+        const nachrichten = await kanal.messages.fetch({ limit: 50 });
+
+        const heuteString = new Date().toISOString().slice(0, 10);
+        const ziehungsMarker = `diamond-taxi-lotto-ziehung-${heuteString}`;
+
+        const schonGezogen = nachrichten.some(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === ziehungsMarker
+        );
+
+        if (schonGezogen) return;
+
+        const alteListe = nachrichten.find(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === LOTTO_MARKER_EINTRAEGE
+        );
+
+        const eintraege = alteListe
+            ? parseLottoZeilen(alteListe.embeds[0].fields[0]?.value)
+            : [];
+
+        const pool = Array.from({ length: 10 }, (_, i) => i + 1);
+        const gewinnzahlen = [];
+
+        for (let i = 0; i < 2; i++) {
+            const index = Math.floor(Math.random() * pool.length);
+            gewinnzahlen.push(pool.splice(index, 1)[0]);
+        }
+        gewinnzahlen.sort((a, b) => a - b);
+
+        const gewinner = eintraege.filter(e =>
+            e.zahlen.length === 2 && e.zahlen.every(z => gewinnzahlen.includes(z))
+        );
+
+        const gesamtpreis = Math.floor(Math.random() * (100000 - 20000 + 1)) + 20000;
+        const preisProGewinner = gewinner.length > 0 ? Math.floor(gesamtpreis / gewinner.length) : 0;
+
+        const embed = new EmbedBuilder()
+            .setTitle("🎰 Diamond Taxi Lotto – Ziehung")
+            .setColor(gewinner.length > 0 ? 0xf1c40f : 0x7f8c8d)
+            .addFields(
+                { name: "Gewinnzahlen", value: gewinnzahlen.join(", ") },
+                { name: "Gesamtpreis", value: formatBetrag(gesamtpreis) },
+                {
+                    name: "Gewinner",
+                    value: gewinner.length > 0
+                        ? gewinner.map(g => `<@${g.id}> – ${formatBetrag(preisProGewinner)}`).join("\n")
+                        : "Diesmal hat leider niemand gewonnen."
+                }
+            )
+            .setFooter({ text: ziehungsMarker })
+            .setTimestamp();
+
+        await kanal.send({ embeds: [embed] });
+
+        if (alteListe) {
+            await alteListe.edit({ embeds: [baueLottoEmbed([])] });
+        }
+
+    } catch (error) {
+        console.error("Lotto-Ziehung fehlgeschlagen:", error.message);
+    }
+}
+
+
+// ======================
+// TAGES-ZITAT
+// ======================
+const FALLBACK_ZITATE = [
+    "Der frühe Vogel fängt den Wurm.",
+    "Wer kämpft, kann verlieren. Wer nicht kämpft, hat schon verloren.",
+    "Steter Tropfen höhlt den Stein.",
+    "Aller Anfang ist schwer.",
+    "Übung macht den Meister.",
+    "Ohne Fleiß kein Preis.",
+    "Kleine Schritte führen auch zum Ziel.",
+    "Was dich nicht umbringt, macht dich stärker.",
+    "Der Weg ist das Ziel.",
+    "Wer nicht wagt, der nicht gewinnt."
+];
+
+
+async function posteTagesZitat(guild) {
+
+    try {
+
+        if (!config.zitatKanal || config.zitatKanal === "HIER_KANAL_ID_EINTRAGEN") return;
+
+        const kanal = await guild.channels.fetch(config.zitatKanal);
+
+        const heuteString = new Date().toISOString().slice(0, 10);
+        const markerText = `diamond-taxi-zitat-${heuteString}`;
+
+        const letzteNachrichten = await kanal.messages.fetch({ limit: 5 });
+
+        const schonGepostet = letzteNachrichten.some(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === markerText
+        );
+
+        if (schonGepostet) return;
+
+        let zitatText = null;
+        let autor = null;
+
+        try {
+            const response = await fetch("https://zenquotes.io/api/today");
+            const daten = await response.json();
+            if (Array.isArray(daten) && daten[0]?.q) {
+                zitatText = daten[0].q;
+                autor = daten[0].a;
+            }
+        } catch (error) {
+            console.error("Zitat-API nicht erreichbar, nutze Fallback:", error.message);
+        }
+
+        if (!zitatText) {
+            zitatText = FALLBACK_ZITATE[Math.floor(Math.random() * FALLBACK_ZITATE.length)];
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle("💬 Zitat des Tages")
+            .setDescription(`*${zitatText}*` + (autor ? `\n— ${autor}` : ""))
+            .setColor(0x2c3e50)
+            .setFooter({ text: markerText })
+            .setTimestamp();
+
+        await kanal.send({ embeds: [embed] });
+
+    } catch (error) {
+        console.error("Tages-Zitat fehlgeschlagen:", error.message);
+    }
+}
+
+
+// ======================
 // HAUPT-HANDLER
 // ======================
 const handleInteraction = async (interaction) => {
@@ -428,9 +751,7 @@ const handleInteraction = async (interaction) => {
             await interaction.deferReply({ ephemeral: true });
             await aktualisiereTeamliste(interaction.guild);
 
-            return interaction.editReply({
-                content: "✅ Teamliste wurde aktualisiert."
-            });
+            return interaction.editReply({ content: "✅ Teamliste wurde aktualisiert." });
         }
 
 
@@ -442,10 +763,13 @@ const handleInteraction = async (interaction) => {
             const status = interaction.options.getString("status");
             const eigeneNachricht = interaction.options.getString("nachricht");
             const wiederoeffnung = interaction.options.getString("wiederoeffnung");
+            const naechsteSchliessung = interaction.options.getString("naechste_schliessung");
 
             await interaction.deferReply({ ephemeral: true });
 
-            const kanal = await aktualisiereBewerbungsStatus(interaction.guild, status, wiederoeffnung);
+            const terminInput = status === "offen" ? naechsteSchliessung : wiederoeffnung;
+
+            const kanal = await aktualisiereBewerbungsStatus(interaction.guild, status, terminInput);
 
             if (!kanal) {
                 return interaction.editReply({
@@ -521,7 +845,11 @@ const handleInteraction = async (interaction) => {
                 .setColor(0x3498db)
                 .setTimestamp();
 
-            const nachricht = await kanal.send({ embeds: [embed] });
+            const nachricht = await kanal.send({
+                content: `<@&${config.bürgerRolle}>`,
+                embeds: [embed]
+            });
+
             await nachricht.react("✅");
 
             return interaction.editReply({ content: "✅ Ankündigung wurde gepostet." });
@@ -560,7 +888,11 @@ const handleInteraction = async (interaction) => {
                 .setDescription(info || "Bitte reagiert mit ✅ oder ❌, ob ihr teilnehmen könnt.")
                 .setTimestamp();
 
-            const nachricht = await kanal.send({ embeds: [embed] });
+            const nachricht = await kanal.send({
+                content: `<@&${config.bürgerRolle}>`,
+                embeds: [embed]
+            });
+
             await nachricht.react("✅");
             await nachricht.react("❌");
 
@@ -595,6 +927,87 @@ const handleInteraction = async (interaction) => {
                 content:
                     `✅ Teambesprechung wurde gepostet. ${dmErfolgreich} Mitarbeiter per DM benachrichtigt` +
                     (dmFehlgeschlagen > 0 ? `, ${dmFehlgeschlagen} DMs fehlgeschlagen (evtl. DMs deaktiviert).` : ".")
+            });
+        }
+
+
+        // ======================
+        // ABMELDUNG
+        // ======================
+        if (interaction.commandName === "abmeldung") {
+
+            const vonInput = interaction.options.getString("von");
+            const bisInput = interaction.options.getString("bis");
+            const grund = interaction.options.getString("grund");
+
+            const vonDatum = parseDatumMitJahr(vonInput, 0, 0);
+            const bisDatum = parseDatumMitJahr(bisInput, 23, 59);
+
+            if (!vonDatum || !bisDatum) {
+                return interaction.reply({
+                    content: "❌ Bitte gib beide Daten im Format TT.MM.JJJJ an.",
+                    ephemeral: true
+                });
+            }
+
+            if (bisDatum <= vonDatum) {
+                return interaction.reply({
+                    content: "❌ Das 'bis'-Datum muss nach dem 'von'-Datum liegen.",
+                    ephemeral: true
+                });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const eintrag = {
+                id: interaction.user.id,
+                vonUnix: Math.floor(vonDatum.getTime() / 1000),
+                bisUnix: Math.floor(bisDatum.getTime() / 1000),
+                grund
+            };
+
+            const kanal = await aktualisiereAbmeldeliste(interaction.guild, eintrag);
+
+            if (!kanal) {
+                return interaction.editReply({ content: "❌ Kein Abmeldungs-Kanal in config.js eingetragen." });
+            }
+
+            return interaction.editReply({ content: "✅ Deine Abmeldung wurde eingetragen." });
+        }
+
+
+        // ======================
+        // LOTTO
+        // ======================
+        if (interaction.commandName === "lotto") {
+
+            const zahl1 = interaction.options.getInteger("zahl1");
+            const zahl2 = interaction.options.getInteger("zahl2");
+
+            if (zahl1 === zahl2) {
+                return interaction.reply({
+                    content: "❌ Bitte wähle zwei unterschiedliche Zahlen.",
+                    ephemeral: true
+                });
+            }
+
+            if (!config.lottoKanal || config.lottoKanal === "HIER_KANAL_ID_EINTRAGEN") {
+                return interaction.reply({
+                    content: "❌ Kein Lotto-Kanal in config.js eingetragen.",
+                    ephemeral: true
+                });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            await trageLottoEintragEin(
+                interaction.guild,
+                interaction.user.id,
+                [zahl1, zahl2].sort((a, b) => a - b)
+            );
+
+            return interaction.editReply({
+                content: `✅ Dein Tipp (${zahl1}, ${zahl2}) wurde für die nächste Ziehung eingetragen!`
             });
         }
 
@@ -673,7 +1086,9 @@ const handleInteraction = async (interaction) => {
                     const altesEmbed = msg.embeds[0];
 
                     const neueFelder = altesEmbed.fields.map(f =>
-                        f.name === "Status" ? { name: "Status", value: "✅ Bezahlt" } : { name: f.name, value: f.value, inline: f.inline }
+                        f.name === "Status"
+                            ? { name: "Status", value: "✅ Bezahlt" }
+                            : { name: f.name, value: f.value, inline: f.inline }
                     );
 
                     const neuesEmbed = EmbedBuilder.from(altesEmbed)
@@ -699,7 +1114,6 @@ const handleInteraction = async (interaction) => {
         async function entferneRang(user) {
             for (const rolleID of Object.values(config.rollen)) {
 
-                // Sicherheitsnetz: Bürgerrolle wird NIEMALS entfernt, egal was passiert
                 if (rolleID === config.bürgerRolle) continue;
 
                 const rolle = interaction.guild.roles.cache.get(rolleID);
@@ -719,34 +1133,23 @@ const handleInteraction = async (interaction) => {
                 throw new Error(`Rang existiert nicht in config.js: ${rang}`);
             }
 
-
             const rolle = interaction.guild.roles.cache.get(rollenID);
-
 
             if (!rolle) {
                 throw new Error(`Discord Rolle nicht gefunden: ${rang}`);
             }
 
-
             await user.roles.add(rolle);
 
-
-            // Mitarbeiter Rolle
-            const mitarbeiter = interaction.guild.roles.cache.get(
-                config.mitarbeiterRolle
-            );
+            const mitarbeiter = interaction.guild.roles.cache.get(config.mitarbeiterRolle);
 
             if (mitarbeiter) {
                 await user.roles.add(mitarbeiter);
             }
 
-
-            // Leitungsebene
             if (config.leitungsebene.includes(rollenID)) {
 
-                const leitung = interaction.guild.roles.cache.get(
-                    config.leitungRolle
-                );
+                const leitung = interaction.guild.roles.cache.get(config.leitungRolle);
 
                 if (leitung) {
                     await user.roles.add(leitung);
@@ -754,9 +1157,7 @@ const handleInteraction = async (interaction) => {
 
             } else {
 
-                const leitung = interaction.guild.roles.cache.get(
-                    config.leitungRolle
-                );
+                const leitung = interaction.guild.roles.cache.get(config.leitungRolle);
 
                 if (leitung && user.roles.cache.has(config.leitungRolle)) {
                     await user.roles.remove(leitung);
@@ -802,9 +1203,7 @@ const handleInteraction = async (interaction) => {
                 .setTimestamp();
 
 
-            await interaction.reply({
-                embeds: [embed]
-            });
+            await interaction.reply({ embeds: [embed] });
 
             try {
                 await aktualisiereTeamliste(interaction.guild);
@@ -829,7 +1228,6 @@ const handleInteraction = async (interaction) => {
 
 
             await entferneRang(user);
-
             await gebeRang(user, rang);
 
 
@@ -849,9 +1247,7 @@ const handleInteraction = async (interaction) => {
                 .setTimestamp();
 
 
-            await interaction.reply({
-                embeds: [embed]
-            });
+            await interaction.reply({ embeds: [embed] });
 
             try {
                 await aktualisiereTeamliste(interaction.guild);
@@ -875,7 +1271,6 @@ const handleInteraction = async (interaction) => {
 
 
             await entferneRang(user);
-
             await gebeRang(user, rang);
 
 
@@ -888,9 +1283,7 @@ const handleInteraction = async (interaction) => {
                 .setTimestamp();
 
 
-            await interaction.reply({
-                embeds: [embed]
-            });
+            await interaction.reply({ embeds: [embed] });
 
             try {
                 await aktualisiereTeamliste(interaction.guild);
@@ -925,24 +1318,18 @@ const handleInteraction = async (interaction) => {
             await entferneRang(user);
 
 
-            // Bürgerrolle wird hier bewusst NICHT angefasst - bleibt für immer bestehen
-            const mitarbeiter = interaction.guild.roles.cache.get(
-                config.mitarbeiterRolle
-            );
+            const mitarbeiter = interaction.guild.roles.cache.get(config.mitarbeiterRolle);
 
             if (mitarbeiter && user.roles.cache.has(config.mitarbeiterRolle)) {
                 await user.roles.remove(mitarbeiter);
             }
 
 
-            const leitung = interaction.guild.roles.cache.get(
-                config.leitungRolle
-            );
+            const leitung = interaction.guild.roles.cache.get(config.leitungRolle);
 
             if (leitung && user.roles.cache.has(config.leitungRolle)) {
                 await user.roles.remove(leitung);
             }
-
 
 
             const embed = new EmbedBuilder()
@@ -954,9 +1341,7 @@ const handleInteraction = async (interaction) => {
                 .setTimestamp();
 
 
-            await interaction.reply({
-                embeds: [embed]
-            });
+            await interaction.reply({ embeds: [embed] });
 
             try {
                 await aktualisiereTeamliste(interaction.guild);
@@ -991,5 +1376,8 @@ const handleInteraction = async (interaction) => {
 
 
 handleInteraction.pruefeGeburtstage = pruefeGeburtstage;
+handleInteraction.bereinigeAbmeldungen = bereinigeAbmeldungen;
+handleInteraction.ziehungDurchfuehren = ziehungDurchfuehren;
+handleInteraction.posteTagesZitat = posteTagesZitat;
 
 module.exports = handleInteraction;

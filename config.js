@@ -17,11 +17,16 @@ module.exports = {
     ankuendigungsKanal: "1485668552772948091",
     teambesprechungKanal: "1490706705288396922",
     sanktionsKanal: "1489645535907549235",
+    abmeldungKanal: "1483115051995889726",
+    lottoKanal: "1528684680549761166",
+    zitatKanal: "1531874677277065306",
 
-    // Banner-Bilder für die Bewerbungsphase-Anzeige.
-    // Bild in einen Discord-Kanal hochladen, dann "Link kopieren" und hier einfügen.
-    bewerbungsphaseBildOffen: "HIER_BILD_URL_EINTRAGEN",
-    bewerbungsphaseBildGeschlossen: "HIER_BILD_URL_EINTRAGEN",
+    // Bewerbungsphase-Bilder: Kanal + Nachrichten-ID, wo du die 2 Bilder hochgeladen hast.
+    // Der Bot holt sich darüber jedes Mal einen frischen, gültigen Bild-Link
+    // (die von dir kopierten CDN-Links laufen sonst nach ca. 24h ab).
+    bewerbungsphaseBilderKanal: "1530138668755583027",
+    bewerbungsphaseNachrichtOffenID: "1531642017635893420",
+    bewerbungsphaseNachrichtGeschlossenID: "1531641821116240082",
 
 
     // Leitungsebene Rollen
@@ -35,25 +40,25 @@ module.exports = {
     ],
 
 
-    // Alle Diamond Taxi Ränge
+    // Alle Diamond Taxi Ränge (Reihenfolge = Anzeige-Reihenfolge in der Teamliste, oben zuerst)
     rollen: {
 
-        "Praktikant": "1457892267099422762",
-        "Junior Fahrer": "1457891276505747610",
-        "Fahrer": "1457891223695130755",
-        "Erfahrener Fahrer": "1457891175129415822",
-        "Senior Fahrer": "1457891115700064427",
-        "Diamond Fahrer Azubi": "1457891088085028928",
-        "Diamond Fahrer": "1482760987885965504",
-        "Erweiterter Schutzfahrer": "1482761157784633436",
-        "Rechtsanwalt": "1490089617855217664",
-        "Leitstelle": "1482761216232525824",
-        "Security": "1530980821425721584",
-        "Security Chef": "1496235902069112883",
-        "Personalleitung": "1482761218832863352",
-        "Geschäftsleitung Airport": "1503135142535762010",
+        "CEO": "1457890985567846410",
         "Geschäftsleitung": "1457891019843436757",
-        "CEO": "1457890985567846410"
+        "Geschäftsleitung Airport": "1503135142535762010",
+        "Personalleitung": "1482761218832863352",
+        "Security Chef": "1496235902069112883",
+        "Security": "1530980821425721584",
+        "Leitstelle": "1482761216232525824",
+        "Rechtsanwalt": "1490089617855217664",
+        "Erweiterter Schutzfahrer": "1482761157784633436",
+        "Diamond Fahrer": "1482760987885965504",
+        "Diamond Fahrer Azubi": "1457891088085028928",
+        "Senior Fahrer": "1457891115700064427",
+        "Erfahrener Fahrer": "1457891175129415822",
+        "Fahrer": "1457891223695130755",
+        "Junior Fahrer": "1457891276505747610",
+        "Praktikant": "1457892267099422762"
 
     },
 

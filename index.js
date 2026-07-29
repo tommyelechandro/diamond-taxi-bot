@@ -23,7 +23,6 @@ const client = new Client({
 });
 
 
-// Slash Commands registrieren
 const rest = new REST({ version: "10" })
     .setToken(process.env.TOKEN);
 
@@ -36,43 +35,29 @@ client.once("ready", async () => {
 
     try {
 
-        // Alte GLOBALE Befehle löschen (verhindert doppelte Anzeige,
-        // falls früher versehentlich global UND pro Server registriert wurde)
         await rest.put(
             Routes.applicationCommands(client.user.id),
             { body: [] }
         );
 
-
         await rest.put(
-
             Routes.applicationGuildCommands(
                 client.user.id,
                 config.serverId
             ),
-
-            {
-                body: commands
-            }
-
+            { body: commands }
         );
-
 
         console.log("Slash-Befehle wurden registriert (alte globale Duplikate entfernt)!");
 
-
     } catch (error) {
-
         console.error(error);
-
     }
 
 
-    // Geburtstags-Check: einmal direkt beim Start, danach alle 12 Stunden
+    // Geburtstags-Check: einmal beim Start, danach alle 12 Stunden
     const geburtstagsCheck = async () => {
-
         const guild = client.guilds.cache.get(config.serverId);
-
         if (guild && handleEvents.pruefeGeburtstage) {
             await handleEvents.pruefeGeburtstage(guild);
         }
@@ -80,6 +65,46 @@ client.once("ready", async () => {
 
     geburtstagsCheck();
     setInterval(geburtstagsCheck, 12 * 60 * 60 * 1000);
+
+
+    // Alle 15 Minuten: Lotto-Ziehung (Mi/So 20 Uhr), Tages-Zitat (9 Uhr),
+    // Abmeldeliste bereinigen. Interne Marker verhindern Doppel-Ausführung.
+    const periodischerCheck = async () => {
+
+        const guild = client.guilds.cache.get(config.serverId);
+        if (!guild) return;
+
+        const jetzt = new Date();
+        const wochentag = jetzt.getDay(); // 0 = Sonntag, 3 = Mittwoch
+        const stunde = jetzt.getHours();
+
+        try {
+            if (handleEvents.bereinigeAbmeldungen) {
+                await handleEvents.bereinigeAbmeldungen(guild);
+            }
+        } catch (error) {
+            console.error("Abmeldeliste-Check fehlgeschlagen:", error.message);
+        }
+
+        try {
+            if ((wochentag === 0 || wochentag === 3) && stunde === 20 && handleEvents.ziehungDurchfuehren) {
+                await handleEvents.ziehungDurchfuehren(guild);
+            }
+        } catch (error) {
+            console.error("Lotto-Check fehlgeschlagen:", error.message);
+        }
+
+        try {
+            if (stunde === 9 && handleEvents.posteTagesZitat) {
+                await handleEvents.posteTagesZitat(guild);
+            }
+        } catch (error) {
+            console.error("Zitat-Check fehlgeschlagen:", error.message);
+        }
+    };
+
+    periodischerCheck();
+    setInterval(periodischerCheck, 15 * 60 * 1000);
 
 });
 
@@ -96,8 +121,7 @@ http.createServer((req, res) => {
 
 
 // Selbst-Ping alle 10 Minuten, damit Render den kostenlosen Web Service
-// nicht wegen Inaktivität abschaltet (nur aktiv, wenn RENDER_EXTERNAL_URL
-// gesetzt ist - das passiert automatisch auf Render, lokal nicht).
+// nicht wegen Inaktivität abschaltet.
 if (process.env.RENDER_EXTERNAL_URL) {
 
     setInterval(() => {
@@ -110,7 +134,6 @@ if (process.env.RENDER_EXTERNAL_URL) {
 
 
 
-// Events verbinden
 client.on(
     "interactionCreate",
     handleEvents
@@ -118,5 +141,4 @@ client.on(
 
 
 
-// Bot starten
 client.login(process.env.TOKEN);
