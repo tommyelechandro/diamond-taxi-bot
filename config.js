@@ -1,6 +1,6 @@
 module.exports = {
 
-    // Server (Guild) ID - für Command-Registrierung & den Geburtstags-Check
+    // Server (Guild) ID
     serverId: "1457890146753183918",
 
     // Rollen
@@ -8,18 +8,20 @@ module.exports = {
     leitungRolle: "1489698355507499169",
 
     // Bürgerrolle: wird vom Bot NIEMALS entfernt oder verändert.
-    // Egal ob Einstellung, Beförderung, Degradierung oder Kündigung - diese Rolle bleibt immer bestehen.
     bürgerRolle: "1458078659113128090",
 
-    // Kanal für die automatische Teamliste
-    teamUpdateKanal: "HIER_KANAL_ID_EINTRAGEN",
+    // Kanäle
+    teamUpdateKanal: "1457892182793916427",
+    bewerbungsKanal: "1457892159343558738",
+    geburtstagsKanal: "1529748718360727634",
+    ankuendigungsKanal: "1485668552772948091",
+    teambesprechungKanal: "1490706705288396922",
+    sanktionsKanal: "1489645535907549235",
 
-    // Kanal für die Live-Anzeige der Bewerbungsphase.
-    // Platzhalter stehen lassen, um stattdessen den teamUpdateKanal zu benutzen.
-    bewerbungsKanal: "HIER_KANAL_ID_EINTRAGEN",
-
-    // Kanal, in dem die Geburtstagsliste gespeichert wird und Glückwünsche gepostet werden
-    geburtstagsKanal: "HIER_KANAL_ID_EINTRAGEN",
+    // Banner-Bilder für die Bewerbungsphase-Anzeige.
+    // Bild in einen Discord-Kanal hochladen, dann "Link kopieren" und hier einfügen.
+    bewerbungsphaseBildOffen: "HIER_BILD_URL_EINTRAGEN",
+    bewerbungsphaseBildGeschlossen: "HIER_BILD_URL_EINTRAGEN",
 
 
     // Leitungsebene Rollen
@@ -53,6 +55,33 @@ module.exports = {
         "Geschäftsleitung": "1457891019843436757",
         "CEO": "1457890985567846410"
 
-    }
+    },
+
+
+    // Sanktionskatalog: Paragraph, Beschreibung, Betrag in $
+    sanktionen: [
+        { paragraph: 1, text: "Unentschuldigtes Fehlen", betrag: 50000 },
+        { paragraph: 2, text: "Zu spätes oder fehlendes Abmelden (ab 3 Tagen)", betrag: 25000 },
+        { paragraph: 3, text: "Nichtteilnahme an Pflicht-Events ohne Abmeldung", betrag: 50000 },
+        { paragraph: 4, text: "Beleidigung oder respektloser Umgang mit Fahrgästen", betrag: 75000 },
+        { paragraph: 5, text: "Beleidigung oder respektloser Umgang mit Mitarbeitern", betrag: 50000 },
+        { paragraph: 6, text: "Beleidigung/Respektlosigkeit gegenüber Geschäftsführung, Personalleitung oder CEO", betrag: 100000 },
+        { paragraph: 7, text: "Missachtung einer Anweisung der Geschäftsführung, Personalleitung oder des CEO", betrag: 75000 },
+        { paragraph: 8, text: "Mehrfache Missachtung einer Anweisung der Geschäftsführung, Personalleitung oder des CEO", betrag: 150000 },
+        { paragraph: 9, text: "Missachtung der GPS-Vorgaben im Dienst", betrag: 50000 },
+        { paragraph: 10, text: "Nicht im Funk erreichbar", betrag: 25000 },
+        { paragraph: 11, text: "Unangemessenes Verhalten im Dienst (Trolling, Provokationen etc.)", betrag: 50000 },
+        { paragraph: 12, text: "Dienstfahrzeug beschädigt (selbst verschuldet)", betrag: 100000 },
+        { paragraph: 13, text: "Dienstfahrzeug stehen lassen", betrag: 50000 },
+        { paragraph: 14, text: "Missbrauch eines Dienstfahrzeugs", betrag: 150000 },
+        { paragraph: 15, text: "Vorsätzliches Rammen oder gefährliches Fahren", betrag: 150000 },
+        { paragraph: 16, text: "Fahrerflucht nach einem selbst verursachten Unfall", betrag: 100000 },
+        { paragraph: 17, text: "Entziehung oder Flucht vor staatlichen Behörden während des Dienstes", betrag: 250000 },
+        { paragraph: 18, text: "Besitz von illegalem Equipment während des Dienstes", betrag: 200000 },
+        { paragraph: 19, text: "Nutzung von illegalem Equipment während des Dienstes", betrag: 250000 },
+        { paragraph: 20, text: "Weitergabe interner Informationen", betrag: 150000 },
+        { paragraph: 21, text: "Missbrauch von Unternehmensrechten oder Fahrzeugen", betrag: 200000 },
+        { paragraph: 22, text: "Schädigung des Unternehmensimages", betrag: 150000 }
+    ]
 
 };

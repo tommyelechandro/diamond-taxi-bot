@@ -1,4 +1,3 @@
-cat > /home/claude/bot/events.js << 'EOF'
 const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder } = require("discord.js");
 const config = require("./config.js");
 

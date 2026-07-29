@@ -1,4 +1,3 @@
-cat > /home/claude/bot/commands.js << 'EOF'
 const { SlashCommandBuilder } = require("discord.js");
 const config = require("./config.js");
 
