@@ -21,6 +21,12 @@ module.exports = {
     lottoKanal: "1528684680549761166",
     zitatKanal: "1531874677277065306",
 
+    // Stempeluhr-Auswertung
+    stempeluhrKanal: "1457892980814905579",
+    stundenTop3Kanal: "1505880432904765552",
+    nachtschichtKanal: "1493262902805921924",
+    bewerbungsgespraecheKanal: "HIER_KANAL_ID_EINTRAGEN",
+
     // Bewerbungsphase-Bilder: Kanal + Nachrichten-ID, wo du die 2 Bilder hochgeladen hast.
     // Der Bot holt sich darüber jedes Mal einen frischen, gültigen Bild-Link
     // (die von dir kopierten CDN-Links laufen sonst nach ca. 24h ab).

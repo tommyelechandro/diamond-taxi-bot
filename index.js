@@ -17,7 +17,9 @@ const client = new Client({
 
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
     ]
 
 });
@@ -101,10 +103,33 @@ client.once("ready", async () => {
         } catch (error) {
             console.error("Zitat-Check fehlgeschlagen:", error.message);
         }
+
+        try {
+            if (stunde === 18 && handleEvents.posteWochenStunden) {
+                await handleEvents.posteWochenStunden(guild);
+                if (handleEvents.posteNachtstunden) {
+                    await handleEvents.posteNachtstunden(guild);
+                }
+            }
+        } catch (error) {
+            console.error("Stempeluhr-Check fehlgeschlagen:", error.message);
+        }
     };
 
     periodischerCheck();
     setInterval(periodischerCheck, 15 * 60 * 1000);
+
+
+    // Alle 5 Minuten: Erinnerungen für Bewerbungsgespräche (30 Min vorher)
+    const gespraechsCheck = async () => {
+        const guild = client.guilds.cache.get(config.serverId);
+        if (guild && handleEvents.pruefeGespraechsErinnerungen) {
+            await handleEvents.pruefeGespraechsErinnerungen(guild);
+        }
+    };
+
+    gespraechsCheck();
+    setInterval(gespraechsCheck, 5 * 60 * 1000);
 
 });
 

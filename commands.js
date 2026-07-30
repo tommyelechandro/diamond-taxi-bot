@@ -184,6 +184,23 @@ module.exports = [
 
 
     new SlashCommandBuilder()
+        .setName("gespräch")
+        .setDescription("Trägt ein Bewerbungsgespräch ein und informiert beide Seiten per DM")
+        .addUserOption(option =>
+            option.setName("bewerber").setDescription("Der Bewerber").setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName("datum").setDescription("Datum, Format TT.MM.JJJJ").setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName("uhrzeit").setDescription("Uhrzeit, Format HH:MM").setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName("ort").setDescription("Ort des Gesprächs").setRequired(true)
+        ),
+
+
+    new SlashCommandBuilder()
         .setName("sanktion")
         .setDescription("Sanktionen verwalten")
         .addSubcommand(sub =>

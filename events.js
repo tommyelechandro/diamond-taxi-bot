@@ -669,6 +669,357 @@ async function posteTagesZitat(guild) {
 
 
 // ======================
+// STEMPELUHR-AUSWERTUNG
+// ======================
+const NACHT_START_STUNDE = 1;
+const NACHT_END_STUNDE = 7;
+const NACHT_SATZ_PRO_30MIN = 25000;
+
+
+function combinedEmbedText(embed) {
+    const teile = [embed.description || ""];
+    if (embed.fields) {
+        for (const f of embed.fields) {
+            teile.push(`${f.name}: ${f.value}`);
+        }
+    }
+    return teile.join("\n");
+}
+
+
+function parseStempelNachricht(embed) {
+
+    if (!embed || !embed.title) return null;
+
+    const istEin = embed.title.includes("Eingestempelt");
+    const istAus = embed.title.includes("Ausgestempelt");
+    if (!istEin && !istAus) return null;
+
+    const text = combinedEmbedText(embed);
+
+    const nameMatch = /\*\*(.+?)\*\*\s*hat sich/.exec(text);
+    if (!nameMatch) return null;
+
+    let arbeitszeitMinuten = null;
+    const azMatch = /Arbeitszeit:\*{0,2}\s*(\d+)h\s*(\d+)m/.exec(text);
+
+    if (azMatch) {
+        arbeitszeitMinuten = parseInt(azMatch[1], 10) * 60 + parseInt(azMatch[2], 10);
+    }
+
+    return { typ: istEin ? "ein" : "aus", name: nameMatch[1].trim(), arbeitszeitMinuten };
+}
+
+
+// Holt alle Nachrichten aus einem Kanal seit einem Zeitpunkt (mit Pagination, max. 100 pro Abruf)
+async function holeStempelNachrichten(kanal, seitWann) {
+
+    let alle = [];
+    let vorId;
+
+    while (true) {
+
+        const optionen = { limit: 100 };
+        if (vorId) optionen.before = vorId;
+
+        const batch = await kanal.messages.fetch(optionen);
+        if (batch.size === 0) break;
+
+        const batchArray = Array.from(batch.values());
+        alle = alle.concat(batchArray);
+
+        const letzte = batchArray[batchArray.length - 1];
+        vorId = letzte.id;
+
+        if (letzte.createdTimestamp < seitWann.getTime()) break;
+        if (batch.size < 100) break;
+    }
+
+    return alle
+        .filter(m => m.createdTimestamp >= seitWann.getTime())
+        .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+}
+
+
+function findeMitgliedNachName(guild, name) {
+
+    const gesucht = name.trim().toLowerCase();
+
+    return guild.members.cache.find(m =>
+        m.displayName.toLowerCase() === gesucht ||
+        m.user.username.toLowerCase() === gesucht ||
+        (m.user.globalName || "").toLowerCase() === gesucht
+    ) || null;
+}
+
+
+function montagDieserWoche() {
+    const jetzt = new Date();
+    const tag = jetzt.getDay(); // 0 = Sonntag
+    const diff = (tag === 0 ? -6 : 1 - tag);
+    return new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() + diff, 0, 0, 0);
+}
+
+
+async function posteWochenStunden(guild) {
+
+    try {
+
+        if (!config.stempeluhrKanal || !config.stundenTop3Kanal) return;
+        if (config.stempeluhrKanal === "HIER_KANAL_ID_EINTRAGEN" || config.stundenTop3Kanal === "HIER_KANAL_ID_EINTRAGEN") return;
+
+        const quellKanal = await guild.channels.fetch(config.stempeluhrKanal);
+        const zielKanal = await guild.channels.fetch(config.stundenTop3Kanal);
+
+        const seitWann = montagDieserWoche();
+        const nachrichten = await holeStempelNachrichten(quellKanal, seitWann);
+
+        const minutenProName = {};
+
+        for (const msg of nachrichten) {
+
+            const embed = msg.embeds[0];
+            const info = parseStempelNachricht(embed);
+            if (!info || info.typ !== "aus" || info.arbeitszeitMinuten === null) continue;
+
+            minutenProName[info.name] = (minutenProName[info.name] || 0) + info.arbeitszeitMinuten;
+        }
+
+        const rangliste = Object.entries(minutenProName)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3);
+
+        const heuteString = new Date().toISOString().slice(0, 10);
+        const markerText = `diamond-taxi-wochenstunden-${heuteString}`;
+
+        const letzteNachrichten = await zielKanal.messages.fetch({ limit: 10 });
+        const schonGepostet = letzteNachrichten.some(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === markerText
+        );
+        if (schonGepostet) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle("⏱️ Top 3 – Meiste Arbeitsstunden diese Woche")
+            .setColor(0x1abc9c)
+            .setDescription(
+                rangliste.length > 0
+                    ? rangliste.map(([name, minuten], i) =>
+                        `${["🥇", "🥈", "🥉"][i]} **${name}** – ${Math.floor(minuten / 60)}h ${minuten % 60}m`
+                    ).join("\n")
+                    : "Diese Woche wurden noch keine Schichten beendet."
+            )
+            .setFooter({ text: markerText })
+            .setTimestamp();
+
+        await zielKanal.send({ embeds: [embed] });
+
+    } catch (error) {
+        console.error("Wochen-Stunden-Auswertung fehlgeschlagen:", error.message);
+    }
+}
+
+
+async function posteNachtstunden(guild) {
+
+    try {
+
+        if (!config.stempeluhrKanal || !config.nachtschichtKanal) return;
+        if (config.stempeluhrKanal === "HIER_KANAL_ID_EINTRAGEN" || config.nachtschichtKanal === "HIER_KANAL_ID_EINTRAGEN") return;
+
+        const quellKanal = await guild.channels.fetch(config.stempeluhrKanal);
+        const zielKanal = await guild.channels.fetch(config.nachtschichtKanal);
+
+        const jetzt = new Date();
+        const heute = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+        const nachtStart = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate(), NACHT_START_STUNDE, 0, 0);
+        const nachtEnde = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate(), NACHT_END_STUNDE, 0, 0);
+
+        const heuteString = jetzt.toISOString().slice(0, 10);
+        const markerText = `diamond-taxi-nachtstunden-${heuteString}`;
+
+        const letzteNachrichten = await zielKanal.messages.fetch({ limit: 10 });
+        const schonGepostet = letzteNachrichten.some(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === markerText
+        );
+        if (schonGepostet) return;
+
+        const gestern = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() - 1);
+        const nachrichten = await holeStempelNachrichten(quellKanal, gestern);
+
+        const offeneEinstempelung = {};
+        const nachtMinutenProName = {};
+
+        for (const msg of nachrichten) {
+
+            const embed = msg.embeds[0];
+            const info = parseStempelNachricht(embed);
+            if (!info) continue;
+
+            if (info.typ === "ein") {
+                offeneEinstempelung[info.name] = msg.createdTimestamp;
+                continue;
+            }
+
+            const einZeit = offeneEinstempelung[info.name];
+            delete offeneEinstempelung[info.name];
+            if (!einZeit) continue;
+
+            const ausZeit = msg.createdTimestamp;
+            const overlapStart = Math.max(einZeit, nachtStart.getTime());
+            const overlapEnde = Math.min(ausZeit, nachtEnde.getTime());
+
+            if (overlapEnde > overlapStart) {
+                const minuten = Math.round((overlapEnde - overlapStart) / 60000);
+                nachtMinutenProName[info.name] = (nachtMinutenProName[info.name] || 0) + minuten;
+            }
+        }
+
+        const eintraege = Object.entries(nachtMinutenProName).filter(([, min]) => min > 0);
+
+        const embed = new EmbedBuilder()
+            .setTitle("🌙 Nachtschicht-Auswertung (01:00 - 07:00 Uhr)")
+            .setColor(0x34495e)
+            .setDescription(
+                eintraege.length > 0
+                    ? eintraege.map(([name, minuten]) => {
+                        const bloecke = Math.floor(minuten / 30);
+                        const betrag = bloecke * NACHT_SATZ_PRO_30MIN;
+                        return `**${name}** – ${Math.floor(minuten / 60)}h ${minuten % 60}m → ${betrag.toLocaleString("de-DE")} $`;
+                    }).join("\n")
+                    : "Letzte Nacht wurde niemand in der Nachtschicht (01-07 Uhr) erfasst."
+            )
+            .setFooter({ text: markerText })
+            .setTimestamp();
+
+        const nachricht = await zielKanal.send({ embeds: [embed] });
+        await nachricht.react("✅");
+
+        await guild.members.fetch();
+
+        for (const [name, minuten] of eintraege) {
+
+            const mitglied = findeMitgliedNachName(guild, name);
+            if (!mitglied) continue;
+
+            const bloecke = Math.floor(minuten / 30);
+            const betrag = bloecke * NACHT_SATZ_PRO_30MIN;
+
+            try {
+                await mitglied.send(
+                    `🌙 Du hast letzte Nacht (01-07 Uhr) **${Math.floor(minuten / 60)}h ${minuten % 60}m** in der Nachtschicht gearbeitet.\n` +
+                    `Dafür stehen dir **${betrag.toLocaleString("de-DE")} $** zu (${NACHT_SATZ_PRO_30MIN.toLocaleString("de-DE")} $ pro angefangene 30 Min).`
+                );
+            } catch (error) {
+                console.error(`Nachtschicht-DM an ${name} fehlgeschlagen:`, error.message);
+            }
+        }
+
+    } catch (error) {
+        console.error("Nachtschicht-Auswertung fehlgeschlagen:", error.message);
+    }
+}
+
+
+// ======================
+// BEWERBUNGSGESPRÄCHE
+// ======================
+
+function parseDatumUndUhrzeit(datumInput, uhrzeitInput) {
+
+    const datumMatch = /^([0-9]{1,2})\.([0-9]{1,2})\.([0-9]{4})$/.exec(datumInput.trim());
+    if (!datumMatch) return null;
+
+    const uhrzeitMatch = /^([0-9]{1,2}):([0-9]{2})$/.exec(uhrzeitInput.trim());
+    if (!uhrzeitMatch) return null;
+
+    const tag = parseInt(datumMatch[1], 10);
+    const monat = parseInt(datumMatch[2], 10);
+    const jahr = parseInt(datumMatch[3], 10);
+    const stunde = parseInt(uhrzeitMatch[1], 10);
+    const minute = parseInt(uhrzeitMatch[2], 10);
+
+    if (monat < 1 || monat > 12) return null;
+
+    const tageProMonat = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (tag < 1 || tag > tageProMonat[monat - 1]) return null;
+    if (stunde < 0 || stunde > 23 || minute < 0 || minute > 59) return null;
+
+    return new Date(jahr, monat - 1, tag, stunde, minute, 0);
+}
+
+
+async function pruefeGespraechsErinnerungen(guild) {
+
+    try {
+
+        if (!config.bewerbungsgespraecheKanal || config.bewerbungsgespraecheKanal === "HIER_KANAL_ID_EINTRAGEN") {
+            return;
+        }
+
+        const kanal = await guild.channels.fetch(config.bewerbungsgespraecheKanal);
+        const nachrichten = await kanal.messages.fetch({ limit: 50 });
+
+        const jetzt = Date.now();
+
+        for (const msg of nachrichten.values()) {
+
+            if (msg.author.id !== guild.client.user.id) continue;
+
+            const embed = msg.embeds[0];
+            if (!embed?.footer?.text?.startsWith("diamond-taxi-gespraech|")) continue;
+
+            const erinnerungFeld = embed.fields.find(f => f.name === "Erinnerung");
+            if (!erinnerungFeld || erinnerungFeld.value.includes("✅")) continue;
+
+            const teile = embed.footer.text.split("|");
+            const terminUnix = parseInt(teile[1], 10);
+            if (!terminUnix) continue;
+
+            const minutenBis = (terminUnix * 1000 - jetzt) / 60000;
+
+            // Erinnerungsfenster: 20-35 Minuten vor dem Termin
+            if (minutenBis > 35 || minutenBis < 20) continue;
+
+            const bewerberFeld = embed.fields.find(f => f.name === "Bewerber");
+            const mitarbeiterFeld = embed.fields.find(f => f.name === "Mitarbeiter");
+            const ortFeld = embed.fields.find(f => f.name === "Ort");
+
+            const bewerberId = bewerberFeld?.value.match(/[0-9]+/)?.[0];
+            const mitarbeiterId = mitarbeiterFeld?.value.match(/[0-9]+/)?.[0];
+
+            for (const id of [bewerberId, mitarbeiterId]) {
+
+                if (!id) continue;
+
+                try {
+                    const user = await guild.client.users.fetch(id);
+                    await user.send(
+                        `⏰ Erinnerung: In ca. 30 Minuten ist dein Bewerbungsgespräch (<t:${terminUnix}:t>) bei **${ortFeld?.value || "Diamond Taxi"}**.`
+                    );
+                } catch (error) {
+                    console.error("Erinnerungs-DM fehlgeschlagen:", error.message);
+                }
+            }
+
+            const neueFelder = embed.fields.map(f =>
+                f.name === "Erinnerung"
+                    ? { name: "Erinnerung", value: "✅ Gesendet" }
+                    : { name: f.name, value: f.value, inline: f.inline }
+            );
+
+            const neuesEmbed = EmbedBuilder.from(embed).setFields(neueFelder);
+            await msg.edit({ embeds: [neuesEmbed] });
+        }
+
+    } catch (error) {
+        console.error("Gespräch-Erinnerung fehlgeschlagen:", error.message);
+    }
+}
+
+
+// ======================
 // HAUPT-HANDLER
 // ======================
 const handleInteraction = async (interaction) => {
@@ -1008,6 +1359,89 @@ const handleInteraction = async (interaction) => {
 
             return interaction.editReply({
                 content: `✅ Dein Tipp (${zahl1}, ${zahl2}) wurde für die nächste Ziehung eingetragen!`
+            });
+        }
+
+
+        // ======================
+        // BEWERBUNGSGESPRÄCH
+        // ======================
+        if (interaction.commandName === "gespräch") {
+
+            const bewerber = interaction.options.getMember("bewerber");
+            const datum = interaction.options.getString("datum");
+            const uhrzeit = interaction.options.getString("uhrzeit");
+            const ort = interaction.options.getString("ort");
+
+            const termin = parseDatumUndUhrzeit(datum, uhrzeit);
+
+            if (!termin) {
+                return interaction.reply({
+                    content: "❌ Bitte gib Datum im Format TT.MM.JJJJ und Uhrzeit im Format HH:MM an.",
+                    ephemeral: true
+                });
+            }
+
+            if (termin.getTime() <= Date.now()) {
+                return interaction.reply({
+                    content: "❌ Der Termin muss in der Zukunft liegen.",
+                    ephemeral: true
+                });
+            }
+
+            if (!config.bewerbungsgespraecheKanal || config.bewerbungsgespraecheKanal === "HIER_KANAL_ID_EINTRAGEN") {
+                return interaction.reply({
+                    content: "❌ Kein Kanal für Bewerbungsgespräche in config.js eingetragen.",
+                    ephemeral: true
+                });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const terminUnix = Math.floor(termin.getTime() / 1000);
+            const kanal = await interaction.guild.channels.fetch(config.bewerbungsgespraecheKanal);
+            const markerText = `diamond-taxi-gespraech|${terminUnix}|${bewerber.id}`;
+
+            const embed = new EmbedBuilder()
+                .setTitle("🗣️ Bewerbungsgespräch geplant")
+                .setColor(0x2980b9)
+                .addFields(
+                    { name: "Bewerber", value: `<@${bewerber.id}>`, inline: true },
+                    { name: "Mitarbeiter", value: `<@${interaction.user.id}>`, inline: true },
+                    { name: "Termin", value: `<t:${terminUnix}:F> (<t:${terminUnix}:R>)` },
+                    { name: "Ort", value: ort },
+                    { name: "Erinnerung", value: "❌ Noch nicht gesendet" }
+                )
+                .setFooter({ text: markerText })
+                .setTimestamp();
+
+            await kanal.send({ embeds: [embed] });
+
+            try {
+                await interaction.user.send(
+                    `📋 Du hast ein Bewerbungsgespräch eingetragen:\n\n` +
+                    `**Bewerber:** <@${bewerber.id}>\n` +
+                    `**Termin:** <t:${terminUnix}:F> (<t:${terminUnix}:R>)\n` +
+                    `**Ort:** ${ort}`
+                );
+            } catch (error) {
+                console.error("Bestätigungs-DM an Mitarbeiter fehlgeschlagen:", error.message);
+            }
+
+            try {
+                await bewerber.send(
+                    `🚕💎 Hallo! Dein Bewerbungsgespräch bei Diamond Taxi wurde eingetragen.\n\n` +
+                    `**Termin:** <t:${terminUnix}:F> (<t:${terminUnix}:R>)\n` +
+                    `**Ort:** ${ort}\n` +
+                    `**Ansprechpartner:** <@${interaction.user.id}>\n\n` +
+                    `Bitte sei pünktlich – wir freuen uns auf das Gespräch mit dir!`
+                );
+            } catch (error) {
+                console.error("Einladungs-DM an Bewerber fehlgeschlagen:", error.message);
+            }
+
+            return interaction.editReply({
+                content: "✅ Bewerbungsgespräch wurde eingetragen und beide Seiten per DM informiert."
             });
         }
 
@@ -1379,5 +1813,8 @@ handleInteraction.pruefeGeburtstage = pruefeGeburtstage;
 handleInteraction.bereinigeAbmeldungen = bereinigeAbmeldungen;
 handleInteraction.ziehungDurchfuehren = ziehungDurchfuehren;
 handleInteraction.posteTagesZitat = posteTagesZitat;
+handleInteraction.posteWochenStunden = posteWochenStunden;
+handleInteraction.posteNachtstunden = posteNachtstunden;
+handleInteraction.pruefeGespraechsErinnerungen = pruefeGespraechsErinnerungen;
 
 module.exports = handleInteraction;
