@@ -1,11 +1,11 @@
 const {
     EmbedBuilder,
-    StringSelectMenuBuilder,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle
 } = require("discord.js");
 const config = require("./config.js");
+const sanktionen = require("./sanktionen.js");
 
 // Eindeutige Marker im Footer, damit wir alte Bot-Nachrichten wiederfinden
 // und editieren, statt jedes Mal eine neue zu senden.
@@ -1024,73 +1024,20 @@ async function pruefeGespraechsErinnerungen(guild) {
 // ======================
 const handleInteraction = async (interaction) => {
 
-    if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu()) return;
+    if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu() && !interaction.isButton() && !interaction.isModalSubmit()) return;
 
     try {
 
         // ======================
-        // SANKTIONS-AUSWAHLMENÜ (Mehrfachauswahl-Antwort)
+        // SANKTIONS-OBERFLÄCHE (Auswahl, Buttons, Modals)
         // ======================
-        if (interaction.isStringSelectMenu()) {
+        if (!interaction.isChatInputCommand()) {
 
-            if (!interaction.customId.startsWith("sanktion_select|")) return;
-
-            const [, zielUserId, fristUnixStr] = interaction.customId.split("|");
-            const fristUnix = parseInt(fristUnixStr, 10);
-
-            const ausgewaehlt = interaction.values
-                .map(v => config.sanktionen.find(s => String(s.paragraph) === v))
-                .filter(Boolean);
-
-            const gesamtbetrag = ausgewaehlt.reduce((summe, s) => summe + s.betrag, 0);
-
-            const gruendeText = ausgewaehlt
-                .map(s => `§${s.paragraph} – ${s.text} (${formatBetrag(s.betrag)})`)
-                .join("\n");
-
-            if (!config.sanktionsKanal || config.sanktionsKanal === "HIER_KANAL_ID_EINTRAGEN") {
-                return interaction.update({
-                    content: "❌ Kein Sanktions-Kanal in config.js eingetragen.",
-                    components: []
-                });
+            if (interaction.customId.startsWith("sanktion_")) {
+                await sanktionen.handleKomponente(interaction, aktualisiereTeamliste);
             }
 
-            const kanal = await interaction.guild.channels.fetch(config.sanktionsKanal);
-            const markerText = `diamond-taxi-sanktion-offen-${zielUserId}-${Date.now()}`;
-
-            const embed = new EmbedBuilder()
-                .setTitle("⚖️ Sanktion")
-                .setColor(0xe67e22)
-                .addFields(
-                    { name: "Mitarbeiter", value: `<@${zielUserId}>` },
-                    { name: "Verstöße", value: gruendeText.slice(0, 1024) },
-                    { name: "Gesamtbetrag", value: formatBetrag(gesamtbetrag) },
-                    { name: "Ausgestellt von", value: `<@${interaction.user.id}>` },
-                    { name: "Frist", value: `<t:${fristUnix}:F>  (<t:${fristUnix}:R>)` },
-                    { name: "Status", value: "🟡 Offen" }
-                )
-                .setFooter({ text: markerText })
-                .setTimestamp();
-
-            await kanal.send({ embeds: [embed] });
-
-            try {
-                const zielUser = await interaction.client.users.fetch(zielUserId);
-                await zielUser.send(
-                    `⚖️ Du wurdest bei Diamond Taxi sanktioniert.\n\n` +
-                    `**Verstöße:**\n${gruendeText}\n\n` +
-                    `**Gesamtbetrag:** ${formatBetrag(gesamtbetrag)}\n` +
-                    `**Frist:** <t:${fristUnix}:F> (<t:${fristUnix}:R>)\n\n` +
-                    `Bitte begleiche den Betrag fristgerecht.`
-                );
-            } catch (error) {
-                console.error("DM an sanktionierten Mitarbeiter fehlgeschlagen:", error.message);
-            }
-
-            return interaction.update({
-                content: `✅ Sanktion für <@${zielUserId}> wurde ausgestellt und in <#${kanal.id}> gepostet.`,
-                components: []
-            });
+            return;
         }
 
 
@@ -1456,40 +1403,34 @@ const handleInteraction = async (interaction) => {
 
             if (sub === "ausstellen") {
 
-                const zielMitglied = interaction.options.getMember("mitarbeiter");
+                const zielUser = interaction.options.getUser("mitarbeiter");
                 const fristInput = interaction.options.getString("frist");
 
-                const fristDatum = parseDatumMitJahr(fristInput, 23, 59);
+                let fristUnix = null;
 
-                if (!fristDatum) {
-                    return interaction.reply({
-                        content: "❌ Bitte gib die Frist im Format TT.MM.JJJJ an, z. B. `30.07.2026`.",
-                        ephemeral: true
-                    });
+                if (fristInput) {
+
+                    const fristDatum = parseDatumMitJahr(fristInput, 23, 59);
+
+                    if (!fristDatum) {
+                        return interaction.reply({
+                            content: "❌ Bitte gib die Frist im Format TT.MM.JJJJ an, z. B. `30.07.2026`.",
+                            ephemeral: true
+                        });
+                    }
+
+                    fristUnix = Math.floor(fristDatum.getTime() / 1000);
                 }
 
-                const fristUnix = Math.floor(fristDatum.getTime() / 1000);
+                return sanktionen.starteEntwurf(interaction, zielUser.id, fristUnix);
+            }
 
-                const selectMenu = new StringSelectMenuBuilder()
-                    .setCustomId(`sanktion_select|${zielMitglied.id}|${fristUnix}`)
-                    .setPlaceholder("Verstöße auswählen (mehrere möglich)")
-                    .setMinValues(1)
-                    .setMaxValues(config.sanktionen.length)
-                    .addOptions(
-                        config.sanktionen.map(s => ({
-                            label: `§${s.paragraph} – ${s.text}`.slice(0, 100),
-                            description: formatBetrag(s.betrag),
-                            value: String(s.paragraph)
-                        }))
-                    );
 
-                const row = new ActionRowBuilder().addComponents(selectMenu);
+            if (sub === "strikes") {
 
-                return interaction.reply({
-                    content: `Wähle einen oder mehrere Verstöße für <@${zielMitglied.id}> aus:`,
-                    components: [row],
-                    ephemeral: true
-                });
+                const zielUser = interaction.options.getUser("mitarbeiter");
+
+                return sanktionen.zeigeStrikes(interaction, zielUser.id);
             }
 
 

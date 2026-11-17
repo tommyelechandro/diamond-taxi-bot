@@ -3,19 +3,15 @@ const config = require("./config.js");
 
 const rangAuswahl = [
     { name: "Praktikant", value: "Praktikant" },
-    { name: "Junior Fahrer", value: "Junior Fahrer" },
-    { name: "Fahrer", value: "Fahrer" },
-    { name: "Erfahrener Fahrer", value: "Erfahrener Fahrer" },
-    { name: "Senior Fahrer", value: "Senior Fahrer" },
-    { name: "Diamond Fahrer Azubi", value: "Diamond Fahrer Azubi" },
+    { name: "Azubi", value: "Azubi" },
+    { name: "Diplomfahrer", value: "Diplomfahrer" },
+    { name: "Taxi Fahrer", value: "Taxi Fahrer" },
     { name: "Diamond Fahrer", value: "Diamond Fahrer" },
-    { name: "Erweiterter Schutzfahrer", value: "Erweiterter Schutzfahrer" },
-    { name: "Rechtsanwalt", value: "Rechtsanwalt" },
-    { name: "Leitstelle", value: "Leitstelle" },
-    { name: "Security", value: "Security" },
-    { name: "Security Chef", value: "Security Chef" },
+    { name: "Senior Fahrer", value: "Senior Fahrer" },
+    { name: "Elite Fahrer", value: "Elite Fahrer" },
+    { name: "Ausbilder", value: "Ausbilder" },
+    { name: "Ausbildungsleitung", value: "Ausbildungsleitung" },
     { name: "Personalleitung", value: "Personalleitung" },
-    { name: "Geschäftsleitung Airport", value: "Geschäftsleitung Airport" },
     { name: "Geschäftsleitung", value: "Geschäftsleitung" },
     { name: "CEO", value: "CEO" }
 ];
@@ -202,22 +198,30 @@ module.exports = [
 
     new SlashCommandBuilder()
         .setName("sanktion")
-        .setDescription("Sanktionen verwalten")
+        .setDescription("Sanktionen & Strikes verwalten")
         .addSubcommand(sub =>
             sub
                 .setName("ausstellen")
-                .setDescription("Stellt eine neue Sanktion aus (mehrere Gründe möglich)")
+                .setDescription("Stellt eine Sanktion aus (mehrere Verstöße, Strikes, eigene Sanktion möglich)")
                 .addUserOption(option =>
                     option.setName("mitarbeiter").setDescription("Betroffener Mitarbeiter").setRequired(true)
                 )
                 .addStringOption(option =>
-                    option.setName("frist").setDescription("Zahlungsfrist im Format TT.MM.JJJJ").setRequired(true)
+                    option.setName("frist").setDescription("Zahlungsfrist TT.MM.JJJJ (leer = 7 Tage)").setRequired(false)
                 )
         )
         .addSubcommand(sub =>
             sub
                 .setName("bezahlt")
                 .setDescription("Markiert offene Sanktionen eines Mitarbeiters als bezahlt")
+                .addUserOption(option =>
+                    option.setName("mitarbeiter").setDescription("Mitarbeiter").setRequired(true)
+                )
+        )
+        .addSubcommand(sub =>
+            sub
+                .setName("strikes")
+                .setDescription("Zeigt die aktiven Strikes eines Mitarbeiters")
                 .addUserOption(option =>
                     option.setName("mitarbeiter").setDescription("Mitarbeiter").setRequired(true)
                 )

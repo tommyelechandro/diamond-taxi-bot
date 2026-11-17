@@ -35,64 +35,142 @@ module.exports = {
     bewerbungsphaseNachrichtGeschlossenID: "1531641821116240082",
 
 
-    // Leitungsebene Rollen
-    leitungsebene: [
-        "1482761216232525824",
-        "1496235902069112883",
-        "1482761218832863352",
-        "1503135142535762010",
-        "1457891019843436757",
-        "1457890985567846410"
-    ],
+    // Leitungsebene: alle Ränge von CEO bis Ausbildungsleitung (wird automatisch aus "rollen" gebaut, siehe unten)
+    leitungsebeneRaenge: ["CEO", "Geschäftsleitung", "Personalleitung", "Ausbildungsleitung"],
 
 
     // Alle Diamond Taxi Ränge (Reihenfolge = Anzeige-Reihenfolge in der Teamliste, oben zuerst)
+    // WICHTIG: Bei "HIER_ROLLEN_ID_EINTRAGEN" die echte Discord-Rollen-ID einsetzen!
     rollen: {
 
         "CEO": "1457890985567846410",
         "Geschäftsleitung": "1457891019843436757",
-        "Geschäftsleitung Airport": "1503135142535762010",
         "Personalleitung": "1482761218832863352",
-        "Security Chef": "1496235902069112883",
-        "Security": "1530980821425721584",
-        "Leitstelle": "1482761216232525824",
-        "Rechtsanwalt": "1490089617855217664",
-        "Erweiterter Schutzfahrer": "1482761157784633436",
-        "Diamond Fahrer": "1482760987885965504",
-        "Diamond Fahrer Azubi": "1457891088085028928",
+        "Ausbildungsleitung": "HIER_ROLLEN_ID_EINTRAGEN",
+        "Ausbilder": "HIER_ROLLEN_ID_EINTRAGEN",
+        "Elite Fahrer": "HIER_ROLLEN_ID_EINTRAGEN",
         "Senior Fahrer": "1457891115700064427",
-        "Erfahrener Fahrer": "1457891175129415822",
-        "Fahrer": "1457891223695130755",
-        "Junior Fahrer": "1457891276505747610",
+        "Diamond Fahrer": "1482760987885965504",
+        "Taxi Fahrer": "HIER_ROLLEN_ID_EINTRAGEN",
+        "Diplomfahrer": "HIER_ROLLEN_ID_EINTRAGEN",
+        "Azubi": "HIER_ROLLEN_ID_EINTRAGEN",
         "Praktikant": "1457892267099422762"
 
     },
 
 
-    // Sanktionskatalog: Paragraph, Beschreibung, Betrag in $
+    // ======================
+    // Strike-System
+    // ======================
+    maxStrikes: 3,          // bei diesem Stand: automatische Kündigung
+    strikeAblaufTage: 30,   // Strikes laufen ab; so lange zählen auch frühere Verstöße für die Stufe
+
+
+    // Sanktionskatalog
+    // stufen[0] = 1. Verstoß, stufen[1] = 2. Verstoß usw. (innerhalb von strikeAblaufTage).
+    // Gibt es mehr Verstöße als Stufen, gilt die letzte Stufe.
+    // betrag = Geldstrafe in $, strikes = vorgeschlagene Strikes, kuendigung = löst Kündigung aus
     sanktionen: [
-        { paragraph: 1, text: "Unentschuldigtes Fehlen", betrag: 50000 },
-        { paragraph: 2, text: "Zu spätes oder fehlendes Abmelden (ab 3 Tagen)", betrag: 25000 },
-        { paragraph: 3, text: "Nichtteilnahme an Pflicht-Events ohne Abmeldung", betrag: 50000 },
-        { paragraph: 4, text: "Beleidigung oder respektloser Umgang mit Fahrgästen", betrag: 75000 },
-        { paragraph: 5, text: "Beleidigung oder respektloser Umgang mit Mitarbeitern", betrag: 50000 },
-        { paragraph: 6, text: "Beleidigung/Respektlosigkeit gegenüber Geschäftsführung, Personalleitung oder CEO", betrag: 100000 },
-        { paragraph: 7, text: "Missachtung einer Anweisung der Geschäftsführung, Personalleitung oder des CEO", betrag: 75000 },
-        { paragraph: 8, text: "Mehrfache Missachtung einer Anweisung der Geschäftsführung, Personalleitung oder des CEO", betrag: 150000 },
-        { paragraph: 9, text: "Missachtung der GPS-Vorgaben im Dienst", betrag: 50000 },
-        { paragraph: 10, text: "Nicht im Funk erreichbar", betrag: 25000 },
-        { paragraph: 11, text: "Unangemessenes Verhalten im Dienst (Trolling, Provokationen etc.)", betrag: 50000 },
-        { paragraph: 12, text: "Dienstfahrzeug beschädigt (selbst verschuldet)", betrag: 100000 },
-        { paragraph: 13, text: "Dienstfahrzeug stehen lassen", betrag: 50000 },
-        { paragraph: 14, text: "Missbrauch eines Dienstfahrzeugs", betrag: 150000 },
-        { paragraph: 15, text: "Vorsätzliches Rammen oder gefährliches Fahren", betrag: 150000 },
-        { paragraph: 16, text: "Fahrerflucht nach einem selbst verursachten Unfall", betrag: 100000 },
-        { paragraph: 17, text: "Entziehung oder Flucht vor staatlichen Behörden während des Dienstes", betrag: 250000 },
-        { paragraph: 18, text: "Besitz von illegalem Equipment während des Dienstes", betrag: 200000 },
-        { paragraph: 19, text: "Nutzung von illegalem Equipment während des Dienstes", betrag: 250000 },
-        { paragraph: 20, text: "Weitergabe interner Informationen", betrag: 150000 },
-        { paragraph: 21, text: "Missbrauch von Unternehmensrechten oder Fahrzeugen", betrag: 200000 },
-        { paragraph: 22, text: "Schädigung des Unternehmensimages", betrag: 150000 }
+
+        { key: "abwesend_dienst", emoji: "⏳", name: "Abwesenheit im Dienst (>20 Min.)", stufen: [
+            { betrag: 250000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 400000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 0, strikes: 1, text: "wiederholt/absichtlich" }
+        ] },
+
+        { key: "abwesend_vom_dienst", emoji: "⏳", name: "Abwesenheit vom Dienst (keine Abmeldung)", stufen: [
+            { betrag: 150000, strikes: 0, text: "nach 3 Tagen" },
+            { betrag: 150000, strikes: 0, text: "nach 6 Tagen, +150.000 $" },
+            { betrag: 0, strikes: 0, text: "nach 10 Tagen", kuendigung: true }
+        ] },
+
+        { key: "funk", emoji: "📻", name: "Abwesenheit im Funk / Funkpflicht", stufen: [
+            { betrag: 100000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 200000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 400000, strikes: 1, text: "Geldstrafe + Strike" }
+        ] },
+
+        { key: "gps", emoji: "📍", name: "Verletzung der GPS-Pflicht", stufen: [
+            { betrag: 100000, strikes: 0, text: "Geldstrafe" }
+        ] },
+
+        { key: "paycheck", emoji: "💸", name: "Paycheck Farming", stufen: [
+            { betrag: 250000, strikes: 1, text: "Geldstrafe + Strike" },
+            { betrag: 750000, strikes: 2, text: "Geldstrafe + 2 Strikes" }
+        ] },
+
+        { key: "illegal", emoji: "❗", name: "Illegale Gegenstände / Waffen", stufen: [
+            { betrag: 1000000, strikes: 1, text: "schwerer Verstoß" }
+        ] },
+
+        { key: "taser", emoji: "⚡", name: "Taser-Missbrauch", stufen: [
+            { betrag: 500000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 1000000, strikes: 1, text: "schwer/wiederholt" }
+        ] },
+
+        { key: "kleidung", emoji: "👕", name: "Dienstkleidung", stufen: [
+            { betrag: 0, strikes: 0, text: "Verwarnung" },
+            { betrag: 100000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 250000, strikes: 0, text: "Geldstrafe" }
+        ] },
+
+        { key: "diebstahl", emoji: "🔒", name: "Diebstahl / Unterschlagung", stufen: [
+            { betrag: 1000000, strikes: 1, text: "je nach Umfang bis 1 Mio." },
+            { betrag: 1000000, strikes: 2, text: "schwerer Verstoß" }
+        ] },
+
+        { key: "verhalten", emoji: "🗣️", name: "Verhalten ggü. Kunden/Mitarbeitern", stufen: [
+            { betrag: 0, strikes: 0, text: "Verwarnung" },
+            { betrag: 500000, strikes: 1, text: "Geldstrafe + Strike" },
+            { betrag: 0, strikes: 0, text: "Kündigung", kuendigung: true }
+        ] },
+
+        { key: "intern", emoji: "🤫", name: "Interne Informationen weitergegeben", stufen: [
+            { betrag: 0, strikes: 0, text: "leicht: Verwarnung/Geldstrafe" },
+            { betrag: 1000000, strikes: 1, text: "schwerer Verstoß" },
+            { betrag: 0, strikes: 2, text: "besonders schwer" }
+        ] },
+
+        { key: "eigentum", emoji: "🚗", name: "Missbrauch von Firmeneigentum", stufen: [
+            { betrag: 250000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 750000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 0, strikes: 1, text: "schwer/wiederholt" }
+        ] },
+
+        { key: "stehen_lassen", emoji: "🚗", name: "Firmenwagen stehen lassen", stufen: [
+            { betrag: 0, strikes: 0, text: "Verwarnung" },
+            { betrag: 100000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 600000, strikes: 1, text: "Geldstrafe + Strike" }
+        ] },
+
+        { key: "offen_lassen", emoji: "🚗", name: "Firmenfahrzeug offen lassen", stufen: [
+            { betrag: 0, strikes: 0, text: "Verwarnung" },
+            { betrag: 300000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 0, strikes: 1, text: "schwer/wiederholt" }
+        ] },
+
+        { key: "tuev", emoji: "🚗", name: "TÜV nicht beachtet", stufen: [
+            { betrag: 0, strikes: 0, text: "Verwarnung" },
+            { betrag: 250000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 500000, strikes: 0, text: "Geldstrafe" }
+        ] },
+
+        { key: "ausstempeln", emoji: "⏹️", name: "Dienst verlassen ohne Auszustempeln", stufen: [
+            { betrag: 0, strikes: 0, text: "Hinweis/Verwarnung" },
+            { betrag: 100000, strikes: 0, text: "wiederholt, 100.000-250.000 $" },
+            { betrag: 250000, strikes: 0, text: "wiederholt" }
+        ] },
+
+        { key: "anweisung", emoji: "📣", name: "Missachtung von Anweisungen", stufen: [
+            { betrag: 0, strikes: 0, text: "Verwarnung" },
+            { betrag: 250000, strikes: 0, text: "Geldstrafe" },
+            { betrag: 0, strikes: 1, text: "wiederholte/schwere Arbeitsverweigerung" }
+        ] }
+
     ]
 
 };
+
+
+// Leitungsebene-IDs automatisch aus den Rängen oben ableiten
+module.exports.leitungsebene = module.exports.leitungsebeneRaenge.map(name => module.exports.rollen[name]);
