@@ -6,6 +6,8 @@ const {
 } = require("discord.js");
 const config = require("./config.js");
 const sanktionen = require("./sanktionen.js");
+const fahrtenbuch = require("./fahrtenbuch.js");
+const stempelbonus = require("./stempelbonus.js");
 
 // Eindeutige Marker im Footer, damit wir alte Bot-Nachrichten wiederfinden
 // und editieren, statt jedes Mal eine neue zu senden.
@@ -771,6 +773,16 @@ async function posteWochenStunden(guild) {
         const quellKanal = await guild.channels.fetch(config.stempeluhrKanal);
         const zielKanal = await guild.channels.fetch(config.stundenTop3Kanal);
 
+        const heuteString = new Date().toISOString().slice(0, 10);
+        const markerText = `diamond-taxi-wochenstunden-${heuteString}`;
+
+        const letzteNachrichten = await zielKanal.messages.fetch({ limit: 10 });
+        const schonGepostet = letzteNachrichten.some(msg =>
+            msg.author.id === guild.client.user.id &&
+            msg.embeds[0]?.footer?.text === markerText
+        );
+        if (schonGepostet) return;
+
         const seitWann = montagDieserWoche();
         const nachrichten = await holeStempelNachrichten(quellKanal, seitWann);
 
@@ -787,25 +799,24 @@ async function posteWochenStunden(guild) {
 
         const rangliste = Object.entries(minutenProName)
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 3);
+            .slice(0, 5);
 
-        const heuteString = new Date().toISOString().slice(0, 10);
-        const markerText = `diamond-taxi-wochenstunden-${heuteString}`;
+        const bonusListe = stempelbonus.berechne(rangliste);
+        const medaillen = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
 
-        const letzteNachrichten = await zielKanal.messages.fetch({ limit: 10 });
-        const schonGepostet = letzteNachrichten.some(msg =>
-            msg.author.id === guild.client.user.id &&
-            msg.embeds[0]?.footer?.text === markerText
-        );
-        if (schonGepostet) return;
+        await guild.members.fetch();
+
+        const mitglieder = rangliste.map(([name]) => findeMitgliedNachName(guild, name));
+        const anzeige = rangliste.map(([name], i) => mitglieder[i] ? `<@${mitglieder[i].id}>` : `**${name}**`);
+        const zeit = minuten => `${Math.floor(minuten / 60)}h ${minuten % 60}m`;
 
         const embed = new EmbedBuilder()
-            .setTitle("⏱️ Top 3 – Meiste Arbeitsstunden diese Woche")
+            .setTitle("⏱️ Top 5 – Meiste Arbeitsstunden diese Woche")
             .setColor(0x1abc9c)
             .setDescription(
                 rangliste.length > 0
-                    ? rangliste.map(([name, minuten], i) =>
-                        `${["🥇", "🥈", "🥉"][i]} **${name}** – ${Math.floor(minuten / 60)}h ${minuten % 60}m`
+                    ? rangliste.map(([, minuten], i) =>
+                        `${medaillen[i]} ${anzeige[i]} – ${zeit(minuten)} → Sonderzahlung **${formatBetrag(bonusListe[i])}**`
                     ).join("\n")
                     : "Diese Woche wurden noch keine Schichten beendet."
             )
@@ -813,6 +824,55 @@ async function posteWochenStunden(guild) {
             .setTimestamp();
 
         await zielKanal.send({ embeds: [embed] });
+
+        if (rangliste.length === 0) return;
+
+        // Auszahlungsliste im Sonderzahlungs-Kanal
+        const sonderKanalId = config.fahrtenbuch && config.fahrtenbuch.sonderzahlungKanal;
+
+        if (sonderKanalId && sonderKanalId !== "HIER_KANAL_ID_EINTRAGEN") {
+
+            try {
+
+                const sonderKanal = await guild.channels.fetch(sonderKanalId);
+                const gesamt = bonusListe.reduce((a, b) => a + b, 0);
+
+                await sonderKanal.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle("💸 Sonderzahlung – Stempeluhr Top 5")
+                            .setColor(0xf1c40f)
+                            .setDescription(
+                                rangliste.map(([, minuten], i) =>
+                                    `${medaillen[i]} ${anzeige[i]} – ${zeit(minuten)} → **${formatBetrag(bonusListe[i])}**`
+                                ).join("\n") +
+                                `\n\n**Gesamt auszuzahlen:** ${formatBetrag(gesamt)}`
+                            )
+                            .setFooter({ text: `diamond-taxi-stempelbonus-${heuteString}` })
+                            .setTimestamp()
+                    ]
+                });
+
+            } catch (error) {
+                console.error("Stempeluhr-Bonus-Liste fehlgeschlagen:", error.message);
+            }
+        }
+
+        // DM an alle Platzierten
+        for (let i = 0; i < rangliste.length; i++) {
+
+            if (!mitglieder[i]) continue;
+
+            try {
+                await mitglieder[i].send(
+                    `🏆 **Sonderzahlung – Stempeluhr**\n` +
+                    `Du warst diese Woche auf **Platz ${i + 1}** mit **${zeit(rangliste[i][1])}** Arbeitszeit.\n` +
+                    `Dafür erhältst du eine Sonderzahlung von **${formatBetrag(bonusListe[i])}**. Danke für deinen Einsatz! 💎`
+                );
+            } catch (error) {
+                console.error(`Sonderzahlungs-DM an ${rangliste[i][0]} fehlgeschlagen:`, error.message);
+            }
+        }
 
     } catch (error) {
         console.error("Wochen-Stunden-Auswertung fehlgeschlagen:", error.message);
@@ -1035,6 +1095,8 @@ const handleInteraction = async (interaction) => {
 
             if (interaction.customId.startsWith("sanktion_")) {
                 await sanktionen.handleKomponente(interaction, aktualisiereTeamliste);
+            } else if (interaction.customId.startsWith("fb_")) {
+                await fahrtenbuch.handleKomponente(interaction);
             }
 
             return;
@@ -1483,6 +1545,14 @@ const handleInteraction = async (interaction) => {
         }
 
 
+        // ======================
+        // FAHRTENBUCH
+        // ======================
+        if (interaction.commandName === "fahrtenbuch") {
+            return fahrtenbuch.handleBefehl(interaction);
+        }
+
+
         const user = interaction.options.getMember("mitarbeiter");
 
 
@@ -1756,6 +1826,8 @@ handleInteraction.ziehungDurchfuehren = ziehungDurchfuehren;
 handleInteraction.posteTagesZitat = posteTagesZitat;
 handleInteraction.posteWochenStunden = posteWochenStunden;
 handleInteraction.posteNachtstunden = posteNachtstunden;
+handleInteraction.posteFahrtenRechnung = fahrtenbuch.posteWochenRechnung;
+handleInteraction.ladeFahrtenbuch = fahrtenbuch.lade;
 handleInteraction.pruefeGespraechsErinnerungen = pruefeGespraechsErinnerungen;
 
 module.exports = handleInteraction;

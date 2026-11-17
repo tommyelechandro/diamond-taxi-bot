@@ -225,6 +225,34 @@ module.exports = [
                 .addUserOption(option =>
                     option.setName("mitarbeiter").setDescription("Mitarbeiter").setRequired(true)
                 )
+        ),
+
+
+    new SlashCommandBuilder()
+        .setName("fahrtenbuch")
+        .setDescription("Fahrtenbuch verwalten (nur Leitungsebene)")
+        .addSubcommand(sub =>
+            sub
+                .setName("senden")
+                .setDescription("Sendet das Fahrtenbuch-Panel mit den Buttons in den Fahrtenbuch-Kanal")
+        )
+        .addSubcommand(sub =>
+            sub
+                .setName("bezahlt")
+                .setDescription("Markiert Fahrten eines Mitarbeiters als bezahlt")
+                .addUserOption(option =>
+                    option.setName("mitarbeiter").setDescription("Mitarbeiter").setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName("modus")
+                        .setDescription("Alles auf einmal oder einzelne Fahrten auswählen (Standard: alles)")
+                        .setRequired(false)
+                        .addChoices(
+                            { name: "Alles bezahlt", value: "alles" },
+                            { name: "Manuell auswählen", value: "auswahl" }
+                        )
+                )
         )
 
 ];

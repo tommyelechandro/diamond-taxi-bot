@@ -23,7 +23,7 @@ module.exports = {
 
     // Stempeluhr-Auswertung
     stempeluhrKanal: "1457892980814905579",
-    stundenTop3Kanal: "1505880432904765552",
+    stundenTop3Kanal: "1572310873207214090",
     nachtschichtKanal: "1493262902805921924",
     bewerbungsgespraecheKanal: "HIER_KANAL_ID_EINTRAGEN",
 
@@ -40,22 +40,56 @@ module.exports = {
 
 
     // Alle Diamond Taxi Ränge (Reihenfolge = Anzeige-Reihenfolge in der Teamliste, oben zuerst)
-    // WICHTIG: Bei "HIER_ROLLEN_ID_EINTRAGEN" die echte Discord-Rollen-ID einsetzen!
     rollen: {
 
         "CEO": "1457890985567846410",
         "Geschäftsleitung": "1457891019843436757",
         "Personalleitung": "1482761218832863352",
-        "Ausbildungsleitung": "HIER_ROLLEN_ID_EINTRAGEN",
-        "Ausbilder": "HIER_ROLLEN_ID_EINTRAGEN",
-        "Elite Fahrer": "HIER_ROLLEN_ID_EINTRAGEN",
-        "Senior Fahrer": "1457891115700064427",
-        "Diamond Fahrer": "1482760987885965504",
-        "Taxi Fahrer": "HIER_ROLLEN_ID_EINTRAGEN",
-        "Diplomfahrer": "HIER_ROLLEN_ID_EINTRAGEN",
-        "Azubi": "HIER_ROLLEN_ID_EINTRAGEN",
+        "Ausbildungsleitung": "1482761216232525824",
+        "Ausbilder": "1482761157784633436",
+        "Elite Fahrer": "1482760987885965504",
+        "Senior Fahrer": "1457891088085028928",
+        "Diamond Fahrer": "1457891115700064427",
+        "Taxi Fahrer": "1457891175129415822",
+        "Diplomfahrer": "1457891223695130755",
+        "Azubi": "1457891276505747610",
         "Praktikant": "1457892267099422762"
 
+    },
+
+
+    // ======================
+    // Fahrtenbuch
+    // ======================
+    fahrtenbuch: {
+        kanal: "1457893055729504289",              // hier postet /fahrtenbuch senden das Panel
+        logKanal: "1572342391820783667",           // hier landet jede Fahrt (dient gleichzeitig als Speicher!)
+        sonderzahlungKanal: "1572342480123461874", // Sonntag 15 Uhr: Rechnung, Sonntag 20 Uhr: Stempeluhr-Bonus
+
+        bonus: { taxi: 3500, tour: 5000, limousine: 0, bus: 0 },   // Bonus pro Fahrt in $
+        limoRichtpreise: { "30": 150000, "60": 250000 },           // Richtpreise Limousine
+        abgabeAnteil: 0.85,                                        // 85 % der Limousinen-Einnahmen gehen an die Firma
+        loeschFensterStunden: 8                                    // Fahrten dürfen nur so lange gelöscht werden
+    },
+
+
+    // ======================
+    // Wöchentlicher Stempeluhr-Bonus (Top 5, Sonntag 20 Uhr)
+    // ======================
+    stempelBonus: {
+        stufen: [                       // Platz 1-3: Bonus nach eigenen Wochenstunden (absteigend sortiert!)
+            { abStunden: 100, betrag: 1000000 },
+            { abStunden: 80, betrag: 700000 },
+            { abStunden: 60, betrag: 500000 },
+            { abStunden: 40, betrag: 300000 },
+            { abStunden: 20, betrag: 150000 }
+        ],
+        minimum: 50000,                 // unter der letzten Stufe
+        platz45Basis: 50000,            // Platz 4 und 5
+        nahMinuten: 15,                 // höchstens so viele Minuten hinter dem Platz davor ...
+        nahBetrag: 100000,              // ... = 100.000 $
+        sehrNahMinuten: 10,             // höchstens so viele Minuten hinter Platz 3 ...
+        sehrNahAnteil: 0.9              // ... = 90 % vom Bonus von Platz 3
     },
 
 

@@ -1,3 +1,6 @@
+// Alle Zeiten (Lotto, Zitat, Stempeluhr, Fahrtenbuch ...) in deutscher Zeit, egal wo der Server steht
+process.env.TZ = "Europe/Berlin";
+
 const { 
     Client, 
     GatewayIntentBits, 
@@ -57,6 +60,19 @@ client.once("ready", async () => {
     }
 
 
+    // Fahrtenbuch aus dem Logs-Kanal in den Speicher laden
+    try {
+        const fahrtenGuild = client.guilds.cache.get(config.serverId);
+        if (fahrtenGuild && handleEvents.ladeFahrtenbuch) {
+            handleEvents.ladeFahrtenbuch(fahrtenGuild).catch(error => {
+                console.error("Fahrtenbuch konnte nicht geladen werden:", error.message);
+            });
+        }
+    } catch (error) {
+        console.error("Fahrtenbuch-Start fehlgeschlagen:", error.message);
+    }
+
+
     // Geburtstags-Check: einmal beim Start, danach alle 12 Stunden
     const geburtstagsCheck = async () => {
         const guild = client.guilds.cache.get(config.serverId);
@@ -105,14 +121,26 @@ client.once("ready", async () => {
         }
 
         try {
-            if (stunde === 18 && handleEvents.posteWochenStunden) {
+            // täglich 18 Uhr: Nachtschicht-Auswertung
+            if (stunde === 18 && handleEvents.posteNachtstunden) {
+                await handleEvents.posteNachtstunden(guild);
+            }
+
+            // nur sonntags 20 Uhr: Top 5 der Woche inkl. Sonderzahlung
+            if (wochentag === 0 && stunde === 20 && handleEvents.posteWochenStunden) {
                 await handleEvents.posteWochenStunden(guild);
-                if (handleEvents.posteNachtstunden) {
-                    await handleEvents.posteNachtstunden(guild);
-                }
             }
         } catch (error) {
             console.error("Stempeluhr-Check fehlgeschlagen:", error.message);
+        }
+
+        try {
+            // nur sonntags 15 Uhr: Fahrtenbuch-Rechnung (offene Beträge)
+            if (wochentag === 0 && stunde === 15 && handleEvents.posteFahrtenRechnung) {
+                await handleEvents.posteFahrtenRechnung(guild);
+            }
+        } catch (error) {
+            console.error("Fahrtenbuch-Rechnung fehlgeschlagen:", error.message);
         }
     };
 
