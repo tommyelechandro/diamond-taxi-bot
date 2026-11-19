@@ -44,10 +44,18 @@ async function handleBefehl(interaction) {
         .setThumbnail("attachment://logo.png")
         .setFooter({ text: "Automatischer Schutz · Nachrichten in diesem Kanal führen zu einem sofortigen Bann." });
 
-    await kanal.send({
-        embeds: [embed],
-        files: [new AttachmentBuilder(path.join(__dirname, "logo.png"), { name: "logo.png" })]
-    });
+    try {
+        await Promise.race([
+            kanal.send({
+                embeds: [embed],
+                files: [new AttachmentBuilder(path.join(__dirname, "logo.png"), { name: "logo.png" })]
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Logo-Upload Timeout")), 20000))
+        ]);
+    } catch (error) {
+        console.error("Anti-Bot-Panel mit Logo fehlgeschlagen, sende ohne Logo:", error.message);
+        await kanal.send({ embeds: [embed.setThumbnail(null)] });
+    }
 
     return interaction.editReply({ content: `✅ Anti-Bot-Hinweis wurde in <#${kanal.id}> gepostet.` });
 }

@@ -42,6 +42,23 @@ function logoDatei() {
     return new AttachmentBuilder(path.join(__dirname, "logo.png"), { name: "logo.png" });
 }
 
+// Sendet eine Nachricht mit Logo. Hängt der Upload (>20 Sek.) oder schlägt er fehl, geht sie ohne Logo raus.
+async function sendeMitLogo(channel, payload) {
+
+    try {
+        return await Promise.race([
+            channel.send({ ...payload, files: [logoDatei()] }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Logo-Upload Timeout")), 20000))
+        ]);
+    } catch (error) {
+        console.error("Senden mit Logo fehlgeschlagen, sende ohne Logo:", error.message);
+
+        const embeds = (payload.embeds || []).map(e => EmbedBuilder.from(e).setImage(null).setThumbnail(null));
+        return channel.send({ ...payload, embeds });
+    }
+}
+
+
 function leitungsRollen() {
     return [...new Set([config.leitungRolle, ...config.leitungsebene])];
 }
@@ -200,7 +217,7 @@ async function sendeSupportPanel(interaction) {
             }))
         );
 
-    await interaction.channel.send({ embeds: [embed], components: [zeile([menu])], files: [logoDatei()] });
+    await sendeMitLogo(interaction.channel, { embeds: [embed], components: [zeile([menu])] });
 
     return interaction.editReply({ content: "✅ Ticket-Panel wurde gesendet." });
 }
@@ -231,7 +248,7 @@ async function sendeBewerbungPanel(interaction) {
         .setEmoji("📝")
         .setStyle(ButtonStyle.Success);
 
-    await interaction.channel.send({ embeds: [embed], components: [zeile([button])], files: [logoDatei()] });
+    await sendeMitLogo(interaction.channel, { embeds: [embed], components: [zeile([button])] });
 
     return interaction.editReply({ content: "✅ Bewerbungs-Panel wurde gesendet." });
 }
@@ -246,8 +263,17 @@ async function handleBefehl(interaction) {
 
     await interaction.deferReply({ ephemeral: true });
 
-    if (interaction.commandName === "ticket") return sendeSupportPanel(interaction);
-    if (interaction.commandName === "bewerbung") return sendeBewerbungPanel(interaction);
+    try {
+        if (interaction.commandName === "ticket") return await sendeSupportPanel(interaction);
+        if (interaction.commandName === "bewerbung") return await sendeBewerbungPanel(interaction);
+    } catch (error) {
+        console.error("Panel senden fehlgeschlagen:", error);
+        syslog.log(interaction.guild, "Panel senden fehlgeschlagen", error.stack || error.message);
+        return interaction.editReply({
+            content: "❌ Panel konnte nicht gesendet werden: " + error.message +
+                "\nPrüfe, ob der Bot in diesem Kanal Nachrichten senden, Dateien anhängen und Links einbetten darf."
+        });
+    }
 }
 
 
