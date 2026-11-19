@@ -85,7 +85,7 @@ client.once("ready", async () => {
     setInterval(geburtstagsCheck, 12 * 60 * 60 * 1000);
 
 
-    // Alle 15 Minuten: Lotto-Ziehung (Mi/So 20 Uhr), Tages-Zitat (9 Uhr),
+    // Alle 15 Minuten: Tages-Zitat (9 Uhr), Sanktions-Erinnerungen, Wochen-Auswertungen,
     // Abmeldeliste bereinigen. Interne Marker verhindern Doppel-Ausführung.
     const periodischerCheck = async () => {
 
@@ -105,11 +105,11 @@ client.once("ready", async () => {
         }
 
         try {
-            if ((wochentag === 0 || wochentag === 3) && stunde === 20 && handleEvents.ziehungDurchfuehren) {
-                await handleEvents.ziehungDurchfuehren(guild);
+            if (handleEvents.sendeSanktionsErinnerungen) {
+                await handleEvents.sendeSanktionsErinnerungen(guild);
             }
         } catch (error) {
-            console.error("Lotto-Check fehlgeschlagen:", error.message);
+            console.error("Sanktions-Erinnerung fehlgeschlagen:", error.message);
         }
 
         try {
@@ -127,8 +127,10 @@ client.once("ready", async () => {
             }
 
             // nur sonntags 20 Uhr: Top 5 der Woche inkl. Sonderzahlung
-            if (wochentag === 0 && stunde === 20 && handleEvents.posteWochenStunden) {
-                await handleEvents.posteWochenStunden(guild);
+            if (wochentag === 0 && stunde === 20) {
+                if (handleEvents.posteWochenStunden) await handleEvents.posteWochenStunden(guild);
+                if (handleEvents.posteFahrerDerWoche) await handleEvents.posteFahrerDerWoche(guild);
+                if (handleEvents.posteWochenbericht) await handleEvents.posteWochenbericht(guild);
             }
         } catch (error) {
             console.error("Stempeluhr-Check fehlgeschlagen:", error.message);
@@ -191,6 +193,18 @@ client.on(
     "interactionCreate",
     handleEvents
 );
+
+
+// Anti-Bot-Kanal + Ausweis-Bilder in Bewerbungs-Tickets
+client.on("messageCreate", async (message) => {
+
+    try {
+        await handleEvents.handleNachricht(message);
+    } catch (error) {
+        console.error("Nachrichten-Handler fehlgeschlagen:", error.message);
+    }
+
+});
 
 
 

@@ -169,22 +169,8 @@ module.exports = [
 
 
     new SlashCommandBuilder()
-        .setName("lotto")
-        .setDescription("Tippe 2 Zahlen (1-10) für die nächste Lotto-Ziehung (Mi & So)")
-        .addIntegerOption(option =>
-            option.setName("zahl1").setDescription("Erste Zahl (1-10)").setRequired(true).setMinValue(1).setMaxValue(10)
-        )
-        .addIntegerOption(option =>
-            option.setName("zahl2").setDescription("Zweite Zahl (1-10)").setRequired(true).setMinValue(1).setMaxValue(10)
-        ),
-
-
-    new SlashCommandBuilder()
         .setName("gespräch")
         .setDescription("Trägt ein Bewerbungsgespräch ein und informiert beide Seiten per DM")
-        .addUserOption(option =>
-            option.setName("bewerber").setDescription("Der Bewerber").setRequired(true)
-        )
         .addStringOption(option =>
             option.setName("datum").setDescription("Datum, Format TT.MM.JJJJ").setRequired(true)
         )
@@ -193,6 +179,9 @@ module.exports = [
         )
         .addStringOption(option =>
             option.setName("ort").setDescription("Ort des Gesprächs").setRequired(true)
+        )
+        .addUserOption(option =>
+            option.setName("bewerber").setDescription("Der Bewerber (im Bewerbungs-Ticket nicht nötig)").setRequired(false)
         ),
 
 
@@ -253,6 +242,24 @@ module.exports = [
                             { name: "Manuell auswählen", value: "auswahl" }
                         )
                 )
-        )
+        ),
+
+
+    new SlashCommandBuilder()
+        .setName("ticket")
+        .setDescription("Sendet das Ticket-Panel in diesen Kanal (nur Leitungsebene)")
+        .addSubcommand(sub => sub.setName("senden").setDescription("Ticket-Panel mit Auswahlmenü senden")),
+
+
+    new SlashCommandBuilder()
+        .setName("bewerbung")
+        .setDescription("Sendet das Bewerbungs-Panel in diesen Kanal (nur Leitungsebene)")
+        .addSubcommand(sub => sub.setName("senden").setDescription("Bewerbungs-Panel mit Button senden")),
+
+
+    new SlashCommandBuilder()
+        .setName("antibot")
+        .setDescription("Anti-Bot-Kanal (nur Leitungsebene)")
+        .addSubcommand(sub => sub.setName("senden").setDescription("Warn-Nachricht in den Anti-Bot-Kanal senden"))
 
 ];

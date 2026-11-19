@@ -18,14 +18,13 @@ module.exports = {
     teambesprechungKanal: "1490706705288396922",
     sanktionsKanal: "1489645535907549235",
     abmeldungKanal: "1483115051995889726",
-    lottoKanal: "1528684680549761166",
     zitatKanal: "1531874677277065306",
 
     // Stempeluhr-Auswertung
     stempeluhrKanal: "1457892980814905579",
     stundenTop3Kanal: "1572310873207214090",
     nachtschichtKanal: "1493262902805921924",
-    bewerbungsgespraecheKanal: "HIER_KANAL_ID_EINTRAGEN",
+    bewerbungsgespraecheKanal: "1573018364337463447",
 
     // Bewerbungsphase-Bilder: Kanal + Nachrichten-ID, wo du die 2 Bilder hochgeladen hast.
     // Der Bot holt sich darüber jedes Mal einen frischen, gültigen Bild-Link
@@ -55,6 +54,41 @@ module.exports = {
         "Azubi": "1457891276505747610",
         "Praktikant": "1457892267099422762"
 
+    },
+
+
+    // System-Log (Fehler des Bots landen hier)
+    systemLogKanal: "1566531885801152685",
+
+
+    // ======================
+    // Anti-Bot-Kanal (Honeypot)
+    // ======================
+    antiBot: {
+        kanal: "1572930566171656232",
+        logKanal: "1482766954509893796",   // Ban-Log
+        nachrichtenLoeschenStunden: 24     // beim Bann werden die Nachrichten der letzten X Stunden gelöscht
+    },
+
+
+    // ======================
+    // Tickets & Bewerbungen
+    // ======================
+    tickets: {
+        logKanal: "1482766954509893796",            // Verläufe der Support-Tickets
+        bewerbungsLogKanal: "1573023684073881732",  // Verläufe der Bewerbungs-Tickets
+        supportKategorie: "1493261867039195236",    // Kategorie, in der Support-Tickets angelegt werden
+        bewerbungKategorie: "1457892068440674316",  // Kategorie, in der Bewerbungs-Tickets angelegt werden
+        ausweisKanal: "1530129572941795499"         // hierhin leitet der Bot Personalausweis/Führerschein-Bilder weiter
+    },
+
+
+    // ======================
+    // Berichte (sonntags 20 Uhr)
+    // ======================
+    berichte: {
+        kanal: "1566531873981603880",   // Wochenbericht + Inaktivitäts-Liste (nur Leitung)
+        mindestStunden: 5               // darunter gilt ein Mitarbeiter als inaktiv (Leitungsebene ausgenommen)
     },
 
 

@@ -935,6 +935,29 @@ async function posteWochenRechnung(guild) {
             });
         }
 
+        // Teil 3: überfällige Sanktionen
+        try {
+
+            const uebersicht = await require("./sanktionen.js").holeUebersicht(guild);
+            const jetztUnix = Math.floor(Date.now() / 1000);
+            const ueberfaellig = uebersicht.offen.filter(s => s.fristUnix && s.fristUnix < jetztUnix);
+
+            if (ueberfaellig.length > 0) {
+
+                const zeilen = ueberfaellig.map(s => `<@${s.uid}> – **${s.betragText}** (fällig seit <t:${s.fristUnix}:R>)`);
+
+                chunkZeilen(zeilen, 3800).forEach((block, i) => {
+                    embeds.push(new EmbedBuilder()
+                        .setTitle(i === 0 ? "⚖️ Überfällige Sanktionen" : "⚖️ Überfällige Sanktionen (Fortsetzung)")
+                        .setColor(0xe74c3c)
+                        .setDescription(block));
+                });
+            }
+
+        } catch (error) {
+            console.error("Überfällige Sanktionen für Rechnung fehlgeschlagen:", error.message);
+        }
+
         embeds[embeds.length - 1].setFooter({ text: markerText }).setTimestamp();
 
         // Marker muss auf JEDEM Embed stehen, damit die Doppelt-Prüfung greift
@@ -954,6 +977,7 @@ async function posteWochenRechnung(guild) {
 
 module.exports = {
     lade,
+    alleFahrten: () => [...cache.values()],
     handleBefehl,
     handleKomponente,
     posteWochenRechnung,

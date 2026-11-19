@@ -8,6 +8,10 @@ const config = require("./config.js");
 const sanktionen = require("./sanktionen.js");
 const fahrtenbuch = require("./fahrtenbuch.js");
 const stempelbonus = require("./stempelbonus.js");
+const tickets = require("./tickets.js");
+const antibot = require("./antibot.js");
+const berichte = require("./berichte.js");
+const syslog = require("./syslog.js");
 
 // Eindeutige Marker im Footer, damit wir alte Bot-Nachrichten wiederfinden
 // und editieren, statt jedes Mal eine neue zu senden.
@@ -15,7 +19,6 @@ const TEAMLISTE_MARKER = "diamond-taxi-teamliste";
 const BEWERBUNG_MARKER = "diamond-taxi-bewerbungsphase";
 const GEBURTSTAGS_MARKER = "diamond-taxi-geburtstagsliste";
 const ABMELDUNG_MARKER = "diamond-taxi-abmeldeliste";
-const LOTTO_MARKER_EINTRAEGE = "diamond-taxi-lotto-eintraege";
 
 
 function formatBetrag(zahl) {
@@ -466,141 +469,6 @@ async function bereinigeAbmeldungen(guild) {
 
 
 // ======================
-// LOTTO
-// ======================
-
-function parseLottoZeilen(feldValue) {
-
-    if (!feldValue) return [];
-
-    return feldValue.split("\n").map(zeile => {
-
-        const match = /^<@!?([0-9]+)>\s*-\s*([0-9]+),\s*([0-9]+)$/.exec(zeile.trim());
-        if (!match) return null;
-
-        return { id: match[1], zahlen: [parseInt(match[2], 10), parseInt(match[3], 10)] };
-
-    }).filter(Boolean);
-}
-
-
-function baueLottoEmbed(eintraege) {
-
-    return new EmbedBuilder()
-        .setTitle("🎰 Diamond Taxi Lotto – Aktuelle Tipps")
-        .setColor(0x8e44ad)
-        .setDescription("Mit `/lotto` mitspielen! Ziehung jeden Mittwoch & Sonntag um 20 Uhr. Wähle 2 Zahlen von 1-10.")
-        .addFields({
-            name: "Teilnehmer",
-            value: eintraege.length > 0
-                ? eintraege.map(e => `<@${e.id}> - ${e.zahlen.join(", ")}`).join("\n").slice(0, 1024)
-                : "Noch keine Tipps abgegeben."
-        })
-        .setFooter({ text: LOTTO_MARKER_EINTRAEGE })
-        .setTimestamp();
-}
-
-
-async function trageLottoEintragEin(guild, userId, zahlen) {
-
-    const kanal = await guild.channels.fetch(config.lottoKanal);
-    const nachrichten = await kanal.messages.fetch({ limit: 50 });
-
-    const alteListe = nachrichten.find(msg =>
-        msg.author.id === guild.client.user.id &&
-        msg.embeds[0]?.footer?.text === LOTTO_MARKER_EINTRAEGE
-    );
-
-    let eintraege = alteListe
-        ? parseLottoZeilen(alteListe.embeds[0].fields[0]?.value)
-        : [];
-
-    eintraege = eintraege.filter(e => e.id !== userId);
-    eintraege.push({ id: userId, zahlen });
-
-    const embed = baueLottoEmbed(eintraege);
-
-    if (alteListe) {
-        await alteListe.edit({ embeds: [embed] });
-    } else {
-        await kanal.send({ embeds: [embed] });
-    }
-}
-
-
-async function ziehungDurchfuehren(guild) {
-
-    try {
-
-        if (!config.lottoKanal || config.lottoKanal === "HIER_KANAL_ID_EINTRAGEN") return;
-
-        const kanal = await guild.channels.fetch(config.lottoKanal);
-        const nachrichten = await kanal.messages.fetch({ limit: 50 });
-
-        const heuteString = new Date().toISOString().slice(0, 10);
-        const ziehungsMarker = `diamond-taxi-lotto-ziehung-${heuteString}`;
-
-        const schonGezogen = nachrichten.some(msg =>
-            msg.author.id === guild.client.user.id &&
-            msg.embeds[0]?.footer?.text === ziehungsMarker
-        );
-
-        if (schonGezogen) return;
-
-        const alteListe = nachrichten.find(msg =>
-            msg.author.id === guild.client.user.id &&
-            msg.embeds[0]?.footer?.text === LOTTO_MARKER_EINTRAEGE
-        );
-
-        const eintraege = alteListe
-            ? parseLottoZeilen(alteListe.embeds[0].fields[0]?.value)
-            : [];
-
-        const pool = Array.from({ length: 10 }, (_, i) => i + 1);
-        const gewinnzahlen = [];
-
-        for (let i = 0; i < 2; i++) {
-            const index = Math.floor(Math.random() * pool.length);
-            gewinnzahlen.push(pool.splice(index, 1)[0]);
-        }
-        gewinnzahlen.sort((a, b) => a - b);
-
-        const gewinner = eintraege.filter(e =>
-            e.zahlen.length === 2 && e.zahlen.every(z => gewinnzahlen.includes(z))
-        );
-
-        const gesamtpreis = Math.floor(Math.random() * (100000 - 20000 + 1)) + 20000;
-        const preisProGewinner = gewinner.length > 0 ? Math.floor(gesamtpreis / gewinner.length) : 0;
-
-        const embed = new EmbedBuilder()
-            .setTitle("🎰 Diamond Taxi Lotto – Ziehung")
-            .setColor(gewinner.length > 0 ? 0xf1c40f : 0x7f8c8d)
-            .addFields(
-                { name: "Gewinnzahlen", value: gewinnzahlen.join(", ") },
-                { name: "Gesamtpreis", value: formatBetrag(gesamtpreis) },
-                {
-                    name: "Gewinner",
-                    value: gewinner.length > 0
-                        ? gewinner.map(g => `<@${g.id}> – ${formatBetrag(preisProGewinner)}`).join("\n")
-                        : "Diesmal hat leider niemand gewonnen."
-                }
-            )
-            .setFooter({ text: ziehungsMarker })
-            .setTimestamp();
-
-        await kanal.send({ embeds: [embed] });
-
-        if (alteListe) {
-            await alteListe.edit({ embeds: [baueLottoEmbed([])] });
-        }
-
-    } catch (error) {
-        console.error("Lotto-Ziehung fehlgeschlagen:", error.message);
-    }
-}
-
-
-// ======================
 // TAGES-ZITAT
 // ======================
 const FALLBACK_ZITATE = [
@@ -1039,8 +907,8 @@ async function pruefeGespraechsErinnerungen(guild) {
 
             const minutenBis = (terminUnix * 1000 - jetzt) / 60000;
 
-            // Erinnerungsfenster: 20-35 Minuten vor dem Termin
-            if (minutenBis > 35 || minutenBis < 20) continue;
+            // Erinnerungsfenster: 10-17 Minuten vor dem Termin (Check läuft alle 5 Minuten)
+            if (minutenBis > 17 || minutenBis < 10) continue;
 
             const bewerberFeld = embed.fields.find(f => f.name === "Bewerber");
             const mitarbeiterFeld = embed.fields.find(f => f.name === "Mitarbeiter");
@@ -1056,7 +924,7 @@ async function pruefeGespraechsErinnerungen(guild) {
                 try {
                     const user = await guild.client.users.fetch(id);
                     await user.send(
-                        `⏰ Erinnerung: In ca. 30 Minuten ist dein Bewerbungsgespräch (<t:${terminUnix}:t>) bei **${ortFeld?.value || "Diamond Taxi"}**.`
+                        `⏰ Erinnerung: In ca. 15 Minuten ist dein Bewerbungsgespräch (<t:${terminUnix}:t>) bei **${ortFeld?.value || "Diamond Taxi"}**.`
                     );
                 } catch (error) {
                     console.error("Erinnerungs-DM fehlgeschlagen:", error.message);
@@ -1097,6 +965,8 @@ const handleInteraction = async (interaction) => {
                 await sanktionen.handleKomponente(interaction, aktualisiereTeamliste);
             } else if (interaction.customId.startsWith("fb_")) {
                 await fahrtenbuch.handleKomponente(interaction);
+            } else if (interaction.customId.startsWith("tk_")) {
+                await tickets.handleKomponente(interaction, aktualisiereTeamliste);
             }
 
             return;
@@ -1337,47 +1207,23 @@ const handleInteraction = async (interaction) => {
 
 
         // ======================
-        // LOTTO
-        // ======================
-        if (interaction.commandName === "lotto") {
-
-            const zahl1 = interaction.options.getInteger("zahl1");
-            const zahl2 = interaction.options.getInteger("zahl2");
-
-            if (zahl1 === zahl2) {
-                return interaction.reply({
-                    content: "❌ Bitte wähle zwei unterschiedliche Zahlen.",
-                    ephemeral: true
-                });
-            }
-
-            if (!config.lottoKanal || config.lottoKanal === "HIER_KANAL_ID_EINTRAGEN") {
-                return interaction.reply({
-                    content: "❌ Kein Lotto-Kanal in config.js eingetragen.",
-                    ephemeral: true
-                });
-            }
-
-            await interaction.deferReply({ ephemeral: true });
-
-            await trageLottoEintragEin(
-                interaction.guild,
-                interaction.user.id,
-                [zahl1, zahl2].sort((a, b) => a - b)
-            );
-
-            return interaction.editReply({
-                content: `✅ Dein Tipp (${zahl1}, ${zahl2}) wurde für die nächste Ziehung eingetragen!`
-            });
-        }
-
-
-        // ======================
         // BEWERBUNGSGESPRÄCH
         // ======================
         if (interaction.commandName === "gespräch") {
 
-            const bewerber = interaction.options.getMember("bewerber");
+            let bewerber = interaction.options.getMember("bewerber");
+
+            if (!bewerber) {
+                const ticketInfo = /^ticket\|bewerbung\|(\d+)$/.exec(interaction.channel?.topic || "");
+                if (ticketInfo) bewerber = await interaction.guild.members.fetch(ticketInfo[1]).catch(() => null);
+            }
+
+            if (!bewerber) {
+                return interaction.reply({
+                    content: "❌ Bitte wähle einen Bewerber aus (oder führe den Befehl in einem Bewerbungs-Ticket aus).",
+                    ephemeral: true
+                });
+            }
             const datum = interaction.options.getString("datum");
             const uhrzeit = interaction.options.getString("uhrzeit");
             const ort = interaction.options.getString("ort");
@@ -1550,6 +1396,14 @@ const handleInteraction = async (interaction) => {
         // ======================
         if (interaction.commandName === "fahrtenbuch") {
             return fahrtenbuch.handleBefehl(interaction);
+        }
+
+        if (interaction.commandName === "ticket" || interaction.commandName === "bewerbung") {
+            return tickets.handleBefehl(interaction);
+        }
+
+        if (interaction.commandName === "antibot") {
+            return antibot.handleBefehl(interaction);
         }
 
 
@@ -1803,6 +1657,10 @@ const handleInteraction = async (interaction) => {
 
         console.error(error);
 
+        if (interaction.guild) {
+            syslog.log(interaction.guild, `Fehler bei ${interaction.commandName ? "/" + interaction.commandName : interaction.customId}`, error.stack || error.message);
+        }
+
         const fehlerNachricht = "❌ Fehler: " + error.message;
 
         try {
@@ -1822,11 +1680,21 @@ const handleInteraction = async (interaction) => {
 
 handleInteraction.pruefeGeburtstage = pruefeGeburtstage;
 handleInteraction.bereinigeAbmeldungen = bereinigeAbmeldungen;
-handleInteraction.ziehungDurchfuehren = ziehungDurchfuehren;
 handleInteraction.posteTagesZitat = posteTagesZitat;
 handleInteraction.posteWochenStunden = posteWochenStunden;
 handleInteraction.posteNachtstunden = posteNachtstunden;
 handleInteraction.posteFahrtenRechnung = fahrtenbuch.posteWochenRechnung;
+handleInteraction.sendeSanktionsErinnerungen = sanktionen.sendeFristErinnerungen;
+
+const berichtHelfer = { holeStempelNachrichten, parseStempelNachricht, findeMitgliedNachName, montagDieserWoche };
+handleInteraction.posteWochenbericht = guild => berichte.posteWochenbericht(guild, berichtHelfer);
+handleInteraction.posteFahrerDerWoche = guild => berichte.posteFahrerDerWoche(guild, berichtHelfer);
+
+// Neue Nachrichten: Anti-Bot-Kanal (Auto-Bann) und Bewerbungs-Tickets (Ausweis-Bilder)
+handleInteraction.handleNachricht = async message => {
+    if (await antibot.pruefeNachricht(message)) return;
+    await tickets.handleNachricht(message);
+};
 handleInteraction.ladeFahrtenbuch = fahrtenbuch.lade;
 handleInteraction.pruefeGespraechsErinnerungen = pruefeGespraechsErinnerungen;
 

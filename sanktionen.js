@@ -776,7 +776,128 @@ async function handleKomponente(interaction, aktualisiereTeamliste) {
 }
 
 
+// ---------- Übersicht + Fristerinnerung ----------
+
+const OFFEN_REGEX = /^diamond-taxi-sanktion-offen-(\d+)-\d+/;
+
+// Offene Sanktionen + aktive Strikes aller Mitarbeiter (für Berichte)
+async function holeUebersicht(guild) {
+
+    const ergebnis = { offen: [], strikes: {} };
+
+    if (!kanalKonfiguriert()) return ergebnis;
+
+    const kanal = await guild.channels.fetch(config.sanktionsKanal);
+    const seit = Date.now() - config.strikeAblaufTage * TAG_MS;
+    const nachrichten = await holeNachrichtenSeit(kanal, seit);
+
+    for (const msg of nachrichten) {
+
+        if (msg.author.id !== guild.client.user.id) continue;
+
+        const m = FOOTER_REGEX.exec(msg.embeds[0]?.footer?.text || "");
+        if (!m) continue;
+
+        const uid = m[1];
+
+        if (m[4]) {
+            ergebnis.strikes[uid] = 0;
+            continue;
+        }
+
+        ergebnis.strikes[uid] = (ergebnis.strikes[uid] || 0) + (m[3] ? parseInt(m[3], 10) : 0);
+    }
+
+    // offene Sanktionen (auch ältere als 30 Tage): die letzten 100 Nachrichten + die aus dem Zeitraum
+    const alle = new Map();
+    for (const msg of nachrichten) alle.set(msg.id, msg);
+
+    try {
+        const neueste = await kanal.messages.fetch({ limit: 100 });
+        for (const msg of neueste.values()) alle.set(msg.id, msg);
+    } catch (error) {
+        // egal
+    }
+
+    for (const msg of alle.values()) {
+
+        if (msg.author.id !== guild.client.user.id) continue;
+
+        const embed = msg.embeds[0];
+        const m = OFFEN_REGEX.exec(embed?.footer?.text || "");
+        if (!m) continue;
+
+        const frist = /<t:(\d+):F>/.exec(embed.fields.find(f => f.name === "Frist")?.value || "");
+        const betragText = embed.fields.find(f => f.name === "Gesamtbetrag")?.value || "0 $";
+
+        ergebnis.offen.push({
+            uid: m[1],
+            betragText,
+            betrag: parseInt(betragText.replace(/[^0-9]/g, ""), 10) || 0,
+            fristUnix: frist ? parseInt(frist[1], 10) : null
+        });
+    }
+
+    return ergebnis;
+}
+
+
+// Einen Tag vor Fristende (oder wenn schon überfällig) eine DM schicken - nur einmal pro Sanktion
+async function sendeFristErinnerungen(guild) {
+
+    try {
+
+        if (!kanalKonfiguriert()) return;
+
+        const kanal = await guild.channels.fetch(config.sanktionsKanal);
+        const nachrichten = await kanal.messages.fetch({ limit: 100 });
+        const jetzt = Math.floor(Date.now() / 1000);
+
+        for (const msg of nachrichten.values()) {
+
+            if (msg.author.id !== guild.client.user.id) continue;
+
+            const embed = msg.embeds[0];
+            const m = OFFEN_REGEX.exec(embed?.footer?.text || "");
+            if (!m) continue;
+
+            if (embed.fields.some(f => f.name === "Erinnerung")) continue;
+
+            const frist = /<t:(\d+):F>/.exec(embed.fields.find(f => f.name === "Frist")?.value || "");
+            if (!frist) continue;
+
+            const fristUnix = parseInt(frist[1], 10);
+            if (jetzt < fristUnix - 24 * 60 * 60) continue;
+
+            const betragText = embed.fields.find(f => f.name === "Gesamtbetrag")?.value || "";
+            const ueberfaellig = jetzt > fristUnix;
+
+            try {
+                const user = await guild.client.users.fetch(m[1]);
+                await user.send(
+                    ueberfaellig
+                        ? `⚠️ **Zahlungserinnerung:** Deine Sanktion über **${betragText}** war am <t:${fristUnix}:F> fällig und ist **überfällig**. Bitte begleiche sie so schnell wie möglich.`
+                        : `⏰ **Zahlungserinnerung:** Deine Sanktion über **${betragText}** ist am <t:${fristUnix}:F> (<t:${fristUnix}:R>) fällig. Bitte begleiche sie fristgerecht.`
+                );
+            } catch (error) {
+                console.error("Fristerinnerung per DM fehlgeschlagen:", error.message);
+            }
+
+            // Markieren, damit nicht erneut erinnert wird
+            await msg.edit({
+                embeds: [EmbedBuilder.from(embed).addFields({ name: "Erinnerung", value: "✅ Gesendet" })]
+            });
+        }
+
+    } catch (error) {
+        console.error("Fristerinnerungen fehlgeschlagen:", error.message);
+    }
+}
+
+
 module.exports = {
+    holeUebersicht,
+    sendeFristErinnerungen,
     starteEntwurf,
     zeigeStrikes,
     handleKomponente,
